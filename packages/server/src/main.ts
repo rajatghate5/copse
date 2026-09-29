@@ -21,9 +21,14 @@ const invite = process.env.COPSE_INVITE ?? '';
 const staticDir = process.env.COPSE_STATIC;
 
 function chooseStore(): { store: Store; where: string } {
-  const url = process.env.TURSO_DATABASE_URL;
+  // Trim the env values: a token pasted into a hosting dashboard almost always
+  // arrives with a trailing newline, and an Authorization header rejects any
+  // whitespace ("Header 'authorization' has invalid value"). Trimming here makes
+  // a sloppy paste harmless.
+  const url = process.env.TURSO_DATABASE_URL?.trim();
+  const token = process.env.TURSO_AUTH_TOKEN?.trim();
   if (url) {
-    return { store: new TursoStore(url, process.env.TURSO_AUTH_TOKEN), where: `Turso (${new URL(url).host})` };
+    return { store: new TursoStore(url, token), where: `Turso (${new URL(url).host})` };
   }
   const path = process.env.COPSE_DB ?? './copse.db';
   return { store: new SqliteStore(path), where: `local file (${path})` };

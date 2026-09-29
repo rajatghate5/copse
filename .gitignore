@@ -10,3 +10,6 @@ dist
 *.db-wal
 *.db-shm
 copse.db*
+
+# design prototypes — kept locally, not published
+.artifact/
