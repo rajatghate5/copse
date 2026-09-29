@@ -9,6 +9,15 @@ themselves after seven days.
 Built to be cheap to run and boring to maintain: a single Bun process serves both
 the WebSocket API and the web client from one URL, deployed as one Docker image.
 
+## Try it
+
+### → **https://copse.onrender.com**
+
+> Goes live once it's deployed (see [Hosted](#hosted-render--turso)). Opening it
+> needs an invite code. The free server sleeps after 15 minutes idle, so the
+> first person to open it after a quiet spell waits ~50s for it to wake;
+> everyone after that is immediate.
+
 ## What "end-to-end encrypted" means here, honestly
 
 - **The server cannot read your messages.** Every message is encrypted in the
