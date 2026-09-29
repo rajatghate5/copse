@@ -1,0 +1,32 @@
+# Local / offline run that mirrors a deployment: one container serving both the
+# server and the built client. This is the mode for same-room, no-internet play
+# (a phone hotspot) - everyone opens http://<this-machine-ip>:4040.
+#
+#   COPSE_INVITE=copse-4evr docker compose up -d   ->   http://localhost:4040
+services:
+  copse:
+    container_name: copse
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 4040
+      # The invite code friends need to register. Override on the command line.
+      COPSE_INVITE: ${COPSE_INVITE:-copse-4evr}
+      # Store the SQLite file on a named volume so messages survive a restart.
+      COPSE_DB: /data/copse.db
+    volumes:
+      - copse-data:/data
+    ports:
+      - "4040:4040"
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://127.0.0.1:4040/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  copse-data:

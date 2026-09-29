@@ -1,0 +1,32 @@
+# Render Blueprint: one service running the Copse server, which also serves the
+# built client - so multiplayer chat works on a single URL.
+#
+# Deploy: render.com -> New -> Blueprint -> point at this repo. Then set the
+# secret env vars below in the dashboard (they are marked sync:false so they are
+# never committed).
+#
+# The free plan sleeps after 15 minutes of inactivity; the first person to open
+# the link after a quiet spell waits ~50s for it to wake. The client shows a
+# "waking up" state rather than looking broken. Switch plan to "starter" (~$7/mo)
+# to keep it always on.
+services:
+  - type: web
+    name: copse
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # The invite code that gates registration. Set a secret value here.
+      - key: COPSE_INVITE
+        sync: false
+      # Turso holds ciphertext only. Create a db (`turso db create copse`) and
+      # paste its URL and a token here. Leave both unset to fall back to a local
+      # file - but the free plan has no disk, so that file is wiped on redeploy.
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false

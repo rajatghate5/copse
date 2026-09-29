@@ -1,0 +1,12 @@
+{
+  "name": "@copse/protocol",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/all.ts",
+  "exports": {
+    ".": "./src/all.ts"
+  },
+  "dependencies": {
+    "@copse/crypto": "workspace:*"
+  }
+}

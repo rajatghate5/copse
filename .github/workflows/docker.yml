@@ -1,0 +1,79 @@
+# Build the Docker image and prove the container actually serves the client and
+# accepts a WebSocket, before anyone relies on a deploy. Adapted from the No
+# Mercy workflow that exists because an unbuilt image was found broken only at
+# first deploy.
+name: Docker image
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: copse:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start the container
+        run: docker run -d --name copse -p 4040:4040 -e COPSE_INVITE=ci-invite copse:ci
+
+      - name: Wait for /health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4040/health >/dev/null; then
+              echo "healthy after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::container never became healthy"; docker logs copse; exit 1
+
+      - name: Check the client is served
+        run: |
+          body=$(curl -fsS http://127.0.0.1:4040/)
+          echo "$body" | grep -q '<div id="root">' \
+            || { echo "::error::index.html did not come back"; echo "$body" | head -20; exit 1; }
+          asset=$(echo "$body" | grep -oE '/assets/index-[^"]+\.js' | head -1)
+          [ -n "$asset" ] || { echo "::error::no built JS referenced"; exit 1; }
+          curl -fsS "http://127.0.0.1:4040$asset" >/dev/null \
+            || { echo "::error::built JS 404s at $asset"; exit 1; }
+          echo "client served, bundle at $asset"
+
+      # The socket is auth-gated, so an anonymous upgrade must be refused - that
+      # 401 proves the endpoint exists and the gate is on. The full authenticated
+      # round-trip (register -> sign a nonce -> exchange an encrypted message) is
+      # covered by `bun test` in the CI workflow.
+      - name: Check the WebSocket refuses an unauthenticated upgrade
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" -H "Connection: Upgrade" -H "Upgrade: websocket" http://127.0.0.1:4040/ws)
+          [ "$code" = "401" ] || { echo "::error::expected 401 from /ws, got $code"; exit 1; }
+          echo "socket is auth-gated ($code)"
+
+      # The REST layer only checks the shape of what it stores, so a well-formed
+      # dummy body is enough to prove register and challenge are wired.
+      - name: Check the REST auth endpoints respond
+        run: |
+          reg=$(curl -s -X POST http://127.0.0.1:4040/api/register \
+            -H "content-type: application/json" \
+            -d '{"invite":"ci-invite","username":"ci_user","displayName":"CI","keys":{"encPub":"QUJD","sigPub":"QUJD"},"vault":{"salt":"QUJD","iv":"QUJD","ciphertext":"QUJDRA=="}}')
+          echo "register -> $reg"
+          echo "$reg" | grep -q '"userId"' || { echo "::error::register did not return a userId"; exit 1; }
+          ch=$(curl -s -X POST http://127.0.0.1:4040/api/challenge \
+            -H "content-type: application/json" -d '{"username":"ci_user"}')
+          echo "challenge -> $ch"
+          echo "$ch" | grep -q '"challenge"' || { echo "::error::challenge did not return a nonce"; exit 1; }
+
+      - name: Container logs
+        if: always()
+        run: docker logs copse

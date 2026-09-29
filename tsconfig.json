@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "types": ["bun"],
+    "paths": {
+      "@copse/protocol": ["./packages/protocol/src/all.ts"],
+      "@copse/crypto": ["./packages/crypto/src/index.ts"],
+      "@copse/server": ["./packages/server/src/main.ts"]
+    }
+  },
+  "exclude": ["node_modules", "**/dist", "packages/web"]
+}

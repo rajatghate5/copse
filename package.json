@@ -1,0 +1,19 @@
+{
+  "name": "copse",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun --filter @copse/web dev",
+    "serve": "bun run packages/server/src/main.ts",
+    "build": "bun --filter @copse/web build",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p packages/web/tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.2",
+    "typescript": "5.9.2"
+  }
+}

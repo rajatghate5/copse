@@ -1,0 +1,370 @@
+<title>Grove Directions</title>
+<style>
+  :root {
+    --bg: #f4f6f3; --panel: #ffffff; --ink: #17201b; --muted: #5d6b62; --faint: #8a978d;
+    --line: #e2e7e1; --accent: #2f6b4f; --shadow: 0 1px 2px rgba(20,40,30,.06), 0 8px 24px rgba(20,40,30,.06);
+    --radius: 16px;
+    --sans: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+    --serif: "Fraunces", Georgia, serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --editor: "Newsreader", Georgia, serif;
+  }
+  :root:not([data-theme="light"]) { @media (prefers-color-scheme: dark) {
+    --bg: #0f1512; --panel: #161d19; --ink: #e7ece8; --muted: #9fb0a5; --faint: #6f8175;
+    --line: #24302a; --accent: #6fcaa0; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }}
+  :root[data-theme="dark"] {
+    --bg: #0f1512; --panel: #161d19; --ink: #e7ece8; --muted: #9fb0a5; --faint: #6f8175;
+    --line: #24302a; --accent: #6fcaa0; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.5; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 72px; }
+
+  .masthead { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+  h1 { font-family: var(--serif); font-weight: 600; font-size: clamp(34px, 6vw, 54px); line-height: 1.02; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+  .lede { max-width: 62ch; color: var(--muted); font-size: 16px; margin: 0; }
+  .lede b { color: var(--ink); font-weight: 600; }
+
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; margin: 24px 0 26px; }
+  .picker { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tab { appearance: none; border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+    font-family: var(--sans); font-size: 14px; font-weight: 600; padding: 9px 15px; border-radius: 999px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px; transition: all .16s ease; }
+  .tab .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--swatch, var(--accent)); }
+  .tab:hover { border-color: var(--accent); color: var(--ink); }
+  .tab[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .mode { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px; }
+  .mode-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); padding-left: 8px; }
+  .mode button { appearance: none; border: 0; background: transparent; color: var(--muted); font-family: var(--sans); font-weight: 600; font-size: 13px; padding: 6px 13px; border-radius: 999px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .mode button svg { width: 14px; height: 14px; }
+  .mode button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+  .mode button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .panel-note { display: grid; grid-template-columns: 1.15fr .85fr; gap: 28px; align-items: start; }
+  @media (max-width: 760px) { .panel-note { grid-template-columns: 1fr; gap: 20px; } .notes { position: static !important; } }
+
+  .device { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; box-shadow: var(--shadow); container-type: inline-size; }
+  .app { display: grid; grid-template-columns: 240px 1fr; min-height: 540px; }
+  @container (max-width: 560px) { .app { grid-template-columns: 1fr; } .app .roster { display: none; } }
+
+  .roster { border-right: 1px solid var(--m-line); background: var(--m-roster); padding: 14px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .roster-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 12px; }
+  .brand { font-family: var(--m-brandfont, var(--sans)); font-weight: 700; font-size: 16px; color: var(--m-brandink); letter-spacing: var(--m-brandls, 0); }
+  .roster-item { display: flex; gap: 10px; align-items: center; padding: 9px 10px; border-radius: var(--m-item-radius, 12px); }
+  .roster-item.active { background: var(--m-item-active); }
+  .av { width: 34px; height: 34px; border-radius: var(--m-av-radius, 50%); flex: none; display: grid; place-items: center; font-weight: 700; font-size: 13px; color: #fff; font-family: var(--m-brandfont, var(--sans)); }
+  .ri-text { min-width: 0; flex: 1; }
+  .ri-name { font-size: 13.5px; font-weight: 600; color: var(--m-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ri-prev { font-size: 12px; color: var(--m-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ri-meta { font-size: 10.5px; color: var(--m-faint); font-family: var(--m-metafont, var(--sans)); }
+
+  .thread { display: flex; flex-direction: column; background: var(--m-thread); min-width: 0; }
+  .thread-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--m-line); }
+  .th-title { font-weight: 700; font-size: 15px; color: var(--m-ink); font-family: var(--m-brandfont, var(--sans)); }
+  .th-sub { font-size: 11.5px; color: var(--m-faint); }
+  .verified { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--m-verify); background: var(--m-verify-bg); padding: 3px 9px; border-radius: 999px; font-family: var(--m-metafont, var(--sans)); }
+  .verified svg { width: 12px; height: 12px; }
+
+  .stream { flex: 1; padding: 18px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+  .day { align-self: center; font-size: 10.5px; color: var(--m-faint); font-family: var(--m-metafont, var(--sans)); text-transform: uppercase; letter-spacing: .08em; }
+  .bubble { max-width: 76%; padding: 9px 13px; border-radius: var(--m-bubble-radius, 16px); font-size: 13.5px; line-height: 1.4; }
+  .bubble .t { display: block; }
+  .foot-line { display: flex; align-items: center; gap: 7px; margin-top: 4px; }
+  .bubble .ts { font-size: 10px; opacity: .7; font-family: var(--m-metafont, var(--sans)); }
+  .exp { font-size: 9.5px; font-family: var(--m-metafont, var(--sans)); padding: 1px 6px; border-radius: 999px; background: var(--m-exp-bg); color: var(--m-exp); letter-spacing: .02em; }
+  .them { align-self: flex-start; background: var(--m-them); color: var(--m-them-ink); border-bottom-left-radius: var(--m-tail, 6px); }
+  .me { align-self: flex-end; background: var(--m-me); color: var(--m-me-ink); border-bottom-right-radius: var(--m-tail, 6px); }
+  .fading { opacity: .5; }
+  .sender { font-size: 11px; font-weight: 700; margin-bottom: 3px; color: var(--m-sender); font-family: var(--m-brandfont, var(--sans)); }
+  .composer { display: flex; gap: 10px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--m-line); background: var(--m-composer); }
+  .field { flex: 1; background: var(--m-field); border: 1px solid var(--m-field-line); border-radius: var(--m-field-radius, 999px); padding: 9px 14px; font-size: 13px; color: var(--m-faint); font-family: var(--m-fieldfont, var(--sans)); }
+  .send { width: 36px; height: 36px; border-radius: var(--m-send-radius, 50%); background: var(--m-send); display: grid; place-items: center; flex: none; }
+  .send svg { width: 16px; height: 16px; }
+  .lock-strip { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px; font-size: 10.5px; color: var(--m-faint); background: var(--m-lock-bg); font-family: var(--m-metafont, var(--sans)); text-align: center; }
+  .lock-strip svg { width: 11px; height: 11px; flex: none; }
+
+  /* ============ 1 · VERDANT ============ */
+  .verdant { --m-line:#e6ebe4; --m-roster:#f6f8f3; --m-thread:#fffefb; --m-ink:#1c2a21; --m-faint:#7d8c81;
+    --m-item-active:#e4efe6; --m-item-radius:13px; --m-brandink:#22543d; --m-brandfont:var(--serif);
+    --m-them:#eef2ea; --m-them-ink:#26332b; --m-me:#2f6b4f; --m-me-ink:#f2f8f3; --m-sender:#7a5a3a;
+    --m-composer:#fffefb; --m-field:#f2f5ef; --m-field-line:#e0e6da; --m-send:#2f6b4f;
+    --m-verify:#2f6b4f; --m-verify-bg:#e4efe6; --m-lock-bg:#f6f8f3; --m-tail:5px; --m-bubble-radius:17px;
+    --m-exp:#8a7a4a; --m-exp-bg:#f0ead9; }
+  .verdant.dark { --m-line:#233029; --m-roster:#101713; --m-thread:#0d130f; --m-ink:#e4ede7; --m-faint:#7f9186;
+    --m-item-active:#17241c; --m-them:#18211c; --m-them-ink:#d4e0d8; --m-me:#3c7d5d; --m-me-ink:#f0f8f2; --m-sender:#c99a63;
+    --m-composer:#0d130f; --m-field:#141c17; --m-field-line:#233029; --m-send:#4c9a74;
+    --m-verify:#7fd6a8; --m-verify-bg:#153025; --m-lock-bg:#101713; --m-exp:#c2ad76; --m-exp-bg:#241f12; }
+  .verdant .av { background: linear-gradient(150deg,#3c7d5d,#255c41); }
+  .verdant .av.warm { background: linear-gradient(150deg,#c98a4b,#a9682f); }
+  .verdant .av.plum { background: linear-gradient(150deg,#7d5a8c,#5e3f6b); }
+
+  /* ============ 2 · CIPHER ============ */
+  .cipher { --m-brandfont:var(--mono); --m-metafont:var(--mono); --m-fieldfont:var(--mono); --m-brandls:.04em;
+    --m-item-radius:6px; --m-av-radius:6px; --m-field-radius:6px; --m-send-radius:6px; --m-tail:4px; --m-bubble-radius:7px;
+    --m-line:#e0e6de; --m-roster:#eef1eb; --m-thread:#f7f9f5; --m-ink:#16221b; --m-faint:#6a7d70;
+    --m-item-active:#e2e9df; --m-brandink:#1f7a54;
+    --m-them:#e9efe6; --m-them-ink:#20302a; --m-me:#dbeee3; --m-me-ink:#155c40; --m-sender:#1f7a54;
+    --m-composer:#f7f9f5; --m-field:#eef1eb; --m-field-line:#dde3da; --m-send:#1f7a54;
+    --m-verify:#1f7a54; --m-verify-bg:#dcefe4; --m-lock-bg:#eef1eb; --m-exp:#8a7a4a; --m-exp-bg:#ece6d5; }
+  .cipher.dark { --m-line:#1d2723; --m-roster:#0c110f; --m-thread:#0a0e0c; --m-ink:#d6e4dc; --m-faint:#5f766a;
+    --m-item-active:#131c18; --m-brandink:#67e0a3;
+    --m-them:#121a16; --m-them-ink:#c7d6cd; --m-me:#143026; --m-me-ink:#8ff0c0; --m-sender:#67e0a3;
+    --m-composer:#0a0e0c; --m-field:#0f1512; --m-field-line:#1d2723; --m-send:#67e0a3;
+    --m-verify:#67e0a3; --m-verify-bg:#10231a; --m-lock-bg:#0c110f; --m-exp:#c2ad76; --m-exp-bg:#20200f; }
+  .cipher .av { background:#dbeee3; color:#1f7a54; font-family:var(--mono); border:1px solid #bfe0cf; }
+  .cipher.dark .av { background:#143026; color:#67e0a3; border-color:#1f4536; }
+  .cipher .av.warm { background:#f0e6cf; color:#8a6a1f; border-color:#e0d3ab; }
+  .cipher.dark .av.warm { background:#2b2412; color:#e0b968; border-color:#443915; }
+  .cipher .av.plum { background:#ece0f0; color:#7d3ba0; border-color:#ddc9e8; }
+  .cipher.dark .av.plum { background:#241a2b; color:#b98fe0; border-color:#3a2a45; }
+
+  /* ============ 3 · PLAIN ============ */
+  .plain { --m-brandfont:"Public Sans",var(--sans); --m-brandls:-.01em; --m-item-radius:10px; --m-tail:5px; --m-bubble-radius:14px;
+    --m-line:#eceef1; --m-roster:#fafbfc; --m-thread:#ffffff; --m-ink:#101418; --m-faint:#8b939d;
+    --m-item-active:#eef1fb; --m-brandink:#101418;
+    --m-them:#f1f3f6; --m-them-ink:#1a1f25; --m-me:#3b4ee0; --m-me-ink:#ffffff; --m-sender:#3b4ee0;
+    --m-composer:#ffffff; --m-field:#f4f6f9; --m-field-line:#e6e9ee; --m-send:#3b4ee0;
+    --m-verify:#2f8a5a; --m-verify-bg:#e7f4ec; --m-lock-bg:#fafbfc; --m-exp:#8b939d; --m-exp-bg:#eef0f3; }
+  .plain.dark { --m-line:#20242b; --m-roster:#0e1114; --m-thread:#0b0d10; --m-ink:#e8ebef; --m-faint:#7a828d;
+    --m-item-active:#151a2e; --m-brandink:#e8ebef;
+    --m-them:#161a20; --m-them-ink:#dde1e7; --m-me:#5566f0; --m-me-ink:#ffffff; --m-sender:#8a97ff;
+    --m-composer:#0b0d10; --m-field:#141821; --m-field-line:#20242b; --m-send:#5566f0;
+    --m-verify:#5fc78d; --m-verify-bg:#12251a; --m-lock-bg:#0e1114; --m-exp:#7a828d; --m-exp-bg:#181b21; }
+  .plain .av { background:#3b4ee0; } .plain .av.warm { background:#e0803b; } .plain .av.plum { background:#8c3be0; }
+
+  /* ============ 4 · PAPER ============ */
+  .paper { --m-brandfont:var(--serif); --m-metafont:var(--sans); --m-fieldfont:var(--editor); --m-item-radius:4px; --m-tail:3px; --m-bubble-radius:4px; --m-av-radius:4px;
+    --m-line:#e6e0d3; --m-roster:#f3eee2; --m-thread:#faf6ec; --m-ink:#2b2620; --m-faint:#8c8271;
+    --m-item-active:#eae2d0; --m-brandink:#7a3527;
+    --m-them:#f0ead9; --m-them-ink:#2f2a22; --m-me:#7a3527; --m-me-ink:#f8f2e6; --m-sender:#4a6b58;
+    --m-composer:#faf6ec; --m-field:#f0ead9; --m-field-line:#e0d8c5; --m-send:#7a3527;
+    --m-verify:#4a6b58; --m-verify-bg:#e6ecd9; --m-lock-bg:#f3eee2; --m-exp:#9c7a3a; --m-exp-bg:#eee2c6; }
+  .paper .bubble { font-family: var(--editor); font-size: 14.5px; }
+  .paper.dark { --m-line:#2b2620; --m-roster:#171410; --m-thread:#12100c; --m-ink:#ede4d3; --m-faint:#9a8c74;
+    --m-item-active:#1f1b14; --m-brandink:#d98a6a;
+    --m-them:#1d1912; --m-them-ink:#e2d8c5; --m-me:#8f4132; --m-me-ink:#f6ead9; --m-sender:#8fb89a;
+    --m-composer:#12100c; --m-field:#1a1610; --m-field-line:#2b2620; --m-send:#b35a44;
+    --m-verify:#8fb89a; --m-verify-bg:#17251c; --m-lock-bg:#171410; --m-exp:#c9a35e; --m-exp-bg:#241d10; }
+  .paper .av { background:#7a3527; } .paper .av.warm { background:#9c7a3a; } .paper .av.plum { background:#4a6b58; }
+
+  /* ============ 5 · DUSK ============ */
+  .dusk { --m-item-radius:14px; --m-tail:6px; --m-bubble-radius:18px;
+    --m-line:#e4e0f2; --m-roster:#f3f1fb; --m-thread:#fbfaff; --m-ink:#241f38; --m-faint:#8b83ab;
+    --m-item-active:#eae6fa; --m-brandink:#5b4bc4;
+    --m-them:#eee9fb; --m-them-ink:#2a2542; --m-me:#6b5bd6; --m-me-ink:#ffffff; --m-sender:#8b5bd6;
+    --m-composer:#fbfaff; --m-field:#f0edfb; --m-field-line:#e2ddf3; --m-send:#6b5bd6;
+    --m-verify:#5b4bc4; --m-verify-bg:#e8e4fa; --m-lock-bg:#f3f1fb; --m-exp:#8b83ab; --m-exp-bg:#ebe7f8; }
+  .dusk.dark { --m-line:#2a2545; --m-roster:#141026; --m-thread:#100c1f; --m-ink:#e9e5fb; --m-faint:#8981b0;
+    --m-item-active:#1d1838; --m-brandink:#b9a3ff;
+    --m-them:#1b1636; --m-them-ink:#ddd6f5; --m-me:#6b5bd6; --m-me-ink:#f4f1ff; --m-sender:#b9a3ff;
+    --m-composer:#100c1f; --m-field:#181330; --m-field-line:#2a2545; --m-send:#8672ec;
+    --m-verify:#b9a3ff; --m-verify-bg:#231b45; --m-lock-bg:#141026; --m-exp:#a99cd8; --m-exp-bg:#1e1838; }
+  .dusk .av { background: linear-gradient(150deg,#7d6be0,#5b4bc4); }
+  .dusk .av.warm { background: linear-gradient(150deg,#d67ba8,#b45580); }
+  .dusk .av.plum { background: linear-gradient(150deg,#9b6be0,#6b4bc4); }
+
+  /* ============ 6 · EMBER (ephemeral-forward) ============ */
+  .ember { --m-brandfont:var(--serif); --m-metafont:var(--mono); --m-item-radius:12px; --m-tail:6px; --m-bubble-radius:16px;
+    --m-line:#f0e2d8; --m-roster:#fdf4ec; --m-thread:#fffaf5; --m-ink:#33231a; --m-faint:#a3897a;
+    --m-item-active:#fce6d6; --m-brandink:#c2502a;
+    --m-them:#f6e9df; --m-them-ink:#3a281d; --m-me:#e8663d; --m-me-ink:#fff6f0; --m-sender:#b8641f;
+    --m-composer:#fffaf5; --m-field:#f8ece2; --m-field-line:#eeddcf; --m-send:#e8663d;
+    --m-verify:#c2502a; --m-verify-bg:#fbe3d6; --m-lock-bg:#fdf4ec; --m-exp:#c2502a; --m-exp-bg:#fbe0d1; }
+  .ember.dark { --m-line:#3a2418; --m-roster:#1a0f09; --m-thread:#150c07; --m-ink:#f2e0d3; --m-faint:#b08a72;
+    --m-item-active:#28160d; --m-brandink:#ff8a5c;
+    --m-them:#241209; --m-them-ink:#f0dccd; --m-me:#e8663d; --m-me-ink:#fff4ec; --m-sender:#ff9d6b;
+    --m-composer:#150c07; --m-field:#20120a; --m-field-line:#3a2418; --m-send:#f0784a;
+    --m-verify:#ff8a5c; --m-verify-bg:#2e150b; --m-lock-bg:#1a0f09; --m-exp:#ff9d6b; --m-exp-bg:#2e150b; }
+  .ember .av { background: linear-gradient(150deg,#f0784a,#c2502a); }
+  .ember .av.warm { background: linear-gradient(150deg,#e0a03b,#b8781f); }
+  .ember .av.plum { background: linear-gradient(150deg,#c25a7a,#8c3b5a); }
+
+  /* ---- notes column ---- */
+  .notes { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); position: sticky; top: 20px; }
+  .dir-name { font-family: var(--serif); font-size: 26px; font-weight: 600; margin: 0 0 2px; letter-spacing: -.01em; }
+  .dir-tag { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 16px; }
+  .dir-desc { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+  .spec { display: flex; flex-direction: column; gap: 12px; }
+  .spec-row { display: grid; grid-template-columns: 82px 1fr; gap: 12px; align-items: baseline; }
+  .spec-k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+  .spec-v { font-size: 13px; color: var(--ink); }
+  .swatches { display: flex; gap: 6px; margin-top: 3px; }
+  .sw { width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(0,0,0,.08); }
+  .best { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line); font-size: 13px; color: var(--muted); }
+  .best b { color: var(--accent); }
+
+  .foot { margin-top: 40px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--faint); font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+  .foot code { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <span class="eyebrow">Grove · UI directions</span>
+    <h1>Six ways Grove could look</h1>
+    <p class="lede">A private, end-to-end encrypted chat for four people. Every direction shows the same moment — a group thread that is <b>verified</b>, <b>encrypted</b>, and <b>kept for only 7 days</b> before messages delete themselves. Each ships in <b>light and dark</b> — use the toggle to see both. Pick the feeling; the plumbing underneath is identical.</p>
+  </header>
+
+  <div class="controls">
+    <div class="picker" role="tablist" aria-label="Design directions">
+      <button class="tab" role="tab" aria-selected="true" data-dir="verdant" style="--swatch:#2f6b4f"><span class="dot"></span>Verdant</button>
+      <button class="tab" role="tab" aria-selected="false" data-dir="cipher" style="--swatch:#1f7a54"><span class="dot"></span>Cipher</button>
+      <button class="tab" role="tab" aria-selected="false" data-dir="plain" style="--swatch:#3b4ee0"><span class="dot"></span>Plain</button>
+      <button class="tab" role="tab" aria-selected="false" data-dir="paper" style="--swatch:#7a3527"><span class="dot"></span>Paper</button>
+      <button class="tab" role="tab" aria-selected="false" data-dir="dusk" style="--swatch:#6b5bd6"><span class="dot"></span>Dusk</button>
+      <button class="tab" role="tab" aria-selected="false" data-dir="ember" style="--swatch:#e8663d"><span class="dot"></span>Ember</button>
+    </div>
+    <div class="mode" role="group" aria-label="Preview theme">
+      <span class="mode-label">Preview</span>
+      <button data-mode="light" aria-pressed="true" id="mLight"></button>
+      <button data-mode="dark" aria-pressed="false" id="mDark"></button>
+    </div>
+  </div>
+
+  <div class="panel-note">
+    <div class="device"><div class="app" id="mock"></div></div>
+    <aside class="notes" id="notes"></aside>
+  </div>
+
+  <div class="foot">
+    <span>Same engine · <code>@grove/crypto</code> · X25519 + Ed25519 + AES-256-GCM</span>
+    <span>Server stores ciphertext only</span>
+    <span>Messages deleted after 7 days</span>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.29.2/feather.min.js"></script>
+<script>
+(function () {
+  var lock = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+  var shield = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l7 3v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>';
+  var arrow = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
+  var sun = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  var moon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+
+  // A per-bubble expiry chip, foregrounded only in the Ember direction.
+  function exp(days, dir) {
+    if (dir !== 'ember') return '';
+    return '<span class="exp">' + days + 'd left</span>';
+  }
+
+  function mock(dir) {
+    var sendColor = (dir === 'cipher') ? 'var(--m-lock-bg)' : '#fff';
+    var verifyLabel = dir === 'cipher' ? 'KEYS MATCH' : 'Verified';
+    var fp = dir === 'cipher'
+      ? '<div class="day" style="text-transform:none;letter-spacing:.02em">safety № 4471 90228 61103 · 8827 41590 33076</div>'
+      : '';
+    var lockText = 'End-to-end encrypted · disappears after 7 days';
+    return (
+      '<div class="roster">' +
+        '<div class="roster-head"><span class="brand">' + (dir==='cipher'?'grove//':'Grove') + '</span></div>' +
+        '<div class="roster-item active"><div class="av">4</div><div class="ri-text"><div class="ri-name">The Four</div><div class="ri-prev">Priya: on my way, 5 min</div></div><div class="ri-meta">now</div></div>' +
+        '<div class="roster-item"><div class="av warm">AK</div><div class="ri-text"><div class="ri-name">Arjun</div><div class="ri-prev">sent the file 🔒</div></div><div class="ri-meta">2m</div></div>' +
+        '<div class="roster-item"><div class="av plum">RG</div><div class="ri-text"><div class="ri-name">Rajat</div><div class="ri-prev">You: haha yeah</div></div><div class="ri-meta">1h</div></div>' +
+        '<div class="roster-item"><div class="av">MS</div><div class="ri-text"><div class="ri-name">Meera</div><div class="ri-prev">Draft key exchanged</div></div><div class="ri-meta">3h</div></div>' +
+      '</div>' +
+      '<div class="thread">' +
+        '<div class="thread-head"><div class="av">4</div><div style="flex:1;min-width:0"><div class="th-title">The Four</div><div class="th-sub">Priya, Arjun, Rajat &amp; you</div></div><span class="verified">' + shield + verifyLabel + '</span></div>' +
+        '<div class="stream">' +
+          '<div class="day">6 days ago' + (dir==='ember' ? ' · fading' : '') + '</div>' +
+          '<div class="bubble them' + (dir==='ember'?' fading':'') + '"><span class="sender">Meera</span><span class="t">who\'s in for the weekend plan?</span><div class="foot-line"><span class="ts">Mon</span>' + exp(1, dir) + '</div></div>' +
+          '<div class="day">Today</div>' +
+          '<div class="bubble them"><span class="sender">Priya</span><span class="t">did the hotspot trick actually work on the train?</span><div class="foot-line"><span class="ts">18:02</span>' + exp(7, dir) + '</div></div>' +
+          '<div class="bubble me"><span class="t">yep. no wifi, no signal even. all four of us local 🙌</span><div class="foot-line"><span class="ts">18:03</span>' + exp(7, dir) + '</div></div>' +
+          '<div class="bubble them"><span class="sender">Arjun</span><span class="t">wait so nothing touched the internet?</span><div class="foot-line"><span class="ts">18:03</span>' + exp(7, dir) + '</div></div>' +
+          '<div class="bubble me"><span class="t">nothing. and even online the server only sees gibberish</span><div class="foot-line"><span class="ts">18:04</span>' + exp(7, dir) + '</div></div>' +
+          fp +
+        '</div>' +
+        '<div class="lock-strip">' + lock + lockText + '</div>' +
+        '<div class="composer"><div class="field">Message The Four…</div><div class="send" style="color:' + sendColor + '">' + arrow + '</div></div>' +
+      '</div>'
+    );
+  }
+
+  var DIRS = {
+    verdant: { name:'Verdant', tag:'Warm · calm · human',
+      desc:'A quiet clearing, not a control panel. Soft pine green, paper-warm surfaces and a Fraunces wordmark make it feel like a place four friends keep. Encryption reads as calm reassurance.',
+      type:'Fraunces + Hanken Grotesk', swatches:['#2f6b4f','#e4efe6','#c98a4b','#fffefb','#1c2a21'],
+      layout:'Rounded bubbles, generous padding, earthy sender tints. Dark mode goes deep-forest.',
+      best:'the default. Personal and low-stakes — right for a tiny trusted circle.' },
+    cipher: { name:'Cipher', tag:'Technical · proof-forward',
+      desc:'For people who like seeing the machinery. Monospace throughout, tight radii, and the safety number sitting right in the thread. The privacy guarantee is the interface, not a footnote.',
+      type:'JetBrains Mono (everything)', swatches:['#0a0e0c','#67e0a3','#143026','#e0b968','#d6e4dc'],
+      layout:'“KEYS MATCH” instead of a soft badge. Ships as a light terminal too, not only dark.',
+      best:'if the crypto is the point and you want it visible. Great for a dev-heavy four.' },
+    plain: { name:'Plain', tag:'Minimal · fast · familiar',
+      desc:'Gets out of the way. High-contrast ink, one confident indigo accent, Public Sans set for speed-reading. Looks like a messenger everyone already knows, so there is nothing to learn.',
+      type:'Public Sans', swatches:['#3b4ee0','#eef1fb','#101418','#ffffff','#2f8a5a'],
+      layout:'Compact rows, indigo “you” bubbles, discreet green verified badge.',
+      best:'if you want zero friction and maximum familiarity. The safe, ship-it choice.' },
+    paper: { name:'Paper', tag:'Editorial · stationery',
+      desc:'Messages as letters. A Newsreader serif body, oxblood accent and squared corners give the feeling of notes passed between four people who write to each other, not ping each other.',
+      type:'Fraunces + Newsreader', swatches:['#7a3527','#f0ead9','#4a6b58','#faf6ec','#2b2620'],
+      layout:'Serif message text, near-square bubbles, hairline rules. Dark mode is “dark academia”.',
+      best:'if Grove is for slower, more considered conversation. The most distinctive of the six.' },
+    dusk: { name:'Dusk', tag:'Soft · nocturnal · cozy',
+      desc:'Built for the evening. A lavender-into-violet palette that is easy on the eyes at night, with soft rounded bubbles. Dark mode is the star here; light mode is a gentle daytime version.',
+      type:'Hanken Grotesk', swatches:['#6b5bd6','#eee9fb','#b9a3ff','#100c1f','#241f38'],
+      layout:'Big radii, violet “you” bubbles, lavender accents. Genuinely comfortable dark mode.',
+      best:'if most chatting happens after dark. Warmer and softer than Plain.' },
+    ember: { name:'Ember', tag:'Ephemeral-forward',
+      desc:'Leans all the way into the 7-day rule. A warm sunset palette, and every message wears how long it has left — the oldest one visibly fading before it disappears. The disappearing is the design.',
+      type:'Fraunces + JetBrains Mono', swatches:['#e8663d','#fbe3d6','#c2502a','#150c07','#33231a'],
+      layout:'Per-message “Nd left” chips, a fading expiring bubble, ember-orange accent. Try dark mode.',
+      best:'if the point of Grove is that nothing sticks around. Most on-brand with 7-day retention.' }
+  };
+
+  var mockEl = document.getElementById('mock');
+  var notesEl = document.getElementById('notes');
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
+  var mLight = document.getElementById('mLight');
+  var mDark = document.getElementById('mDark');
+  mLight.innerHTML = sun + 'Light';
+  mDark.innerHTML = moon + 'Dark';
+
+  var current = 'verdant';
+  var mode = 'light';
+
+  function render() {
+    mockEl.className = 'app ' + current + (mode === 'dark' ? ' dark' : '');
+    mockEl.innerHTML = mock(current);
+    var d = DIRS[current];
+    notesEl.innerHTML =
+      '<div class="dir-tag">' + d.tag + '</div>' +
+      '<h2 class="dir-name">' + d.name + '</h2>' +
+      '<p class="dir-desc">' + d.desc + '</p>' +
+      '<div class="spec">' +
+        '<div class="spec-row"><span class="spec-k">Type</span><span class="spec-v">' + d.type + '</span></div>' +
+        '<div class="spec-row"><span class="spec-k">Palette</span><span class="spec-v"><div class="swatches">' +
+          d.swatches.map(function (c) { return '<span class="sw" style="background:' + c + '"></span>'; }).join('') + '</div></span></div>' +
+        '<div class="spec-row"><span class="spec-k">Layout</span><span class="spec-v">' + d.layout + '</span></div>' +
+      '</div>' +
+      '<p class="best"><b>Pick this</b> ' + d.best + '</p>';
+    if (window.feather) window.feather.replace();
+  }
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      tabs.forEach(function (t) { t.setAttribute('aria-selected', 'false'); });
+      tab.setAttribute('aria-selected', 'true');
+      current = tab.dataset.dir;
+      render();
+    });
+  });
+  [mLight, mDark].forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      mode = btn.dataset.mode;
+      mLight.setAttribute('aria-pressed', String(mode === 'light'));
+      mDark.setAttribute('aria-pressed', String(mode === 'dark'));
+      render();
+    });
+  });
+
+  render();
+})();
+</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Public+Sans:wght@400;600;700;800&display=swap">
