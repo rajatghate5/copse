@@ -1,8 +1,9 @@
 /**
  * The welcome animation, as a pure module (no React). A small private network:
- * a few people (avatar chips) joined by message threads, with encrypted messages
- * gliding between them. Depth and a gentle, cursor-following parallax. It reads as
- * a social circle, not a molecule or a plant.
+ * a few glowing nodes joined by threads, with encrypted messages gliding
+ * between them. Depth and a gentle, cursor-following parallax — it reads as a
+ * small, closed network of people, not a molecule or a plant. Nodes are plain
+ * (no names or avatars) by design.
  *
  * `createPrivateNetwork(canvas)` mounts it and returns a dispose function that
  * cancels the loop, drops listeners and frees GPU resources. Respects
@@ -13,36 +14,11 @@ import * as THREE from 'three';
 
 type Dispose = () => void;
 
-const PEOPLE = [
-  { c: '#3c7d5d', l: 'M' }, { c: '#8fbf9e', l: 'P' }, { c: '#2f6b4f', l: 'I' },
-  { c: '#4c9a74', l: 'R' }, { c: '#c79a4a', l: 'A' }, { c: '#56a781', l: 'J' },
-];
+const NODE_COLORS = [0x3c7d5d, 0x56a781, 0x2f6b4f, 0x8fbf9e, 0x4c9a74, 0xc08a3a];
 const POS: [number, number, number][] = [
   [0, 0, 0], [-1.95, 0.9, -0.3], [1.95, 0.8, 0.4], [-1.5, -1.05, 0.5], [1.55, -1.0, -0.4], [0.1, 1.85, 0.1],
 ];
 const EDGES: [number, number][] = [[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [1, 5], [2, 4], [3, 4]];
-
-function avatarTexture(color: string, letter: string): THREE.CanvasTexture {
-  const s = 160;
-  const c = document.createElement('canvas');
-  c.width = c.height = s;
-  const g = c.getContext('2d')!;
-  g.beginPath();
-  g.arc(s / 2, s / 2, s / 2 - 10, 0, Math.PI * 2);
-  g.fillStyle = color;
-  g.fill();
-  g.lineWidth = 6;
-  g.strokeStyle = 'rgba(255,255,255,0.55)';
-  g.stroke();
-  g.fillStyle = '#fff';
-  g.font = '600 74px "Schibsted Grotesk", system-ui, sans-serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(letter, s / 2, s / 2 + 4);
-  const t = new THREE.CanvasTexture(c);
-  t.anisotropy = 4;
-  return t;
-}
 
 function dotTexture(): THREE.CanvasTexture {
   const s = 64;
@@ -72,19 +48,32 @@ export function createPrivateNetwork(canvas: HTMLCanvasElement): Dispose {
   scene.add(key);
 
   const dot = dotTexture();
-  const avatarTextures: THREE.Texture[] = [];
   const net = new THREE.Group();
   scene.add(net);
 
+  // Each node is a solid coloured sphere wrapped in a soft translucent halo.
+  const geometries: THREE.BufferGeometry[] = [];
+  const materials: THREE.Material[] = [];
   const nodes: THREE.Vector3[] = [];
-  PEOPLE.forEach((pe, i) => {
-    const tex = avatarTexture(pe.c, pe.l);
-    avatarTextures.push(tex);
-    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-    spr.scale.setScalar(i === 0 ? 1.05 : 0.86);
-    spr.position.set(POS[i]![0], POS[i]![1], POS[i]![2]);
-    net.add(spr);
-    nodes.push(new THREE.Vector3(POS[i]![0], POS[i]![1], POS[i]![2]));
+  POS.forEach((p, i) => {
+    const color = NODE_COLORS[i % NODE_COLORS.length]!;
+    const r = i === 0 ? 0.26 : 0.17 + (i % 3) * 0.02;
+
+    const coreGeo = new THREE.SphereGeometry(r, 24, 24);
+    const coreMat = new THREE.MeshStandardMaterial({ color, roughness: 0.45 });
+    const core = new THREE.Mesh(coreGeo, coreMat);
+    core.position.set(p[0], p[1], p[2]);
+    net.add(core);
+
+    const haloGeo = new THREE.SphereGeometry(r * 2.6, 16, 16);
+    const haloMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.12, depthWrite: false });
+    const halo = new THREE.Mesh(haloGeo, haloMat);
+    halo.position.copy(core.position);
+    net.add(halo);
+
+    geometries.push(coreGeo, haloGeo);
+    materials.push(coreMat, haloMat);
+    nodes.push(new THREE.Vector3(p[0], p[1], p[2]));
   });
 
   const lp = new Float32Array(EDGES.length * 6);
@@ -94,14 +83,18 @@ export function createPrivateNetwork(canvas: HTMLCanvasElement): Dispose {
   });
   const lg = new THREE.BufferGeometry();
   lg.setAttribute('position', new THREE.BufferAttribute(lp, 3));
-  const lines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x5fa07f, transparent: true, opacity: 0.28 }));
-  net.add(lines);
+  const lineMat = new THREE.LineBasicMaterial({ color: 0x5fa07f, transparent: true, opacity: 0.28 });
+  net.add(new THREE.LineSegments(lg, lineMat));
+  geometries.push(lg);
+  materials.push(lineMat);
 
   const pulses = EDGES.map((e, i) => {
     const col = i % 3 === 0 ? 0xf0c45a : 0x9ff0b8;
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot, color: col, transparent: true, opacity: 0.95, depthWrite: false }));
+    const mat = new THREE.SpriteMaterial({ map: dot, color: col, transparent: true, opacity: 0.95, depthWrite: false });
+    const sp = new THREE.Sprite(mat);
     sp.scale.setScalar(0.22);
     net.add(sp);
+    materials.push(mat);
     return { a: nodes[e[0]]!, b: nodes[e[1]]!, off: Math.random(), spd: 0.16 + Math.random() * 0.12, sp };
   });
 
@@ -159,9 +152,9 @@ export function createPrivateNetwork(canvas: HTMLCanvasElement): Dispose {
   return () => {
     cancelAnimationFrame(raf);
     window.removeEventListener('pointermove', onMove);
-    avatarTextures.forEach((t) => t.dispose());
     dot.dispose();
-    lg.dispose();
+    geometries.forEach((g) => g.dispose());
+    materials.forEach((m) => m.dispose());
     renderer.dispose();
   };
 }

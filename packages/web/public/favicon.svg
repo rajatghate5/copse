@@ -1,5 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Copse">
   <rect width="64" height="64" rx="16" fill="#2f6b4f"/>
-  <path d="M30 51A19 19 0 0 1 11 32C11 16 30 8 55 8 55 32 44 51 30 51Z" fill="none" stroke="#eaf5ee" stroke-width="3.6" stroke-linejoin="round"/>
-  <path d="M12 51C18 40 27 33 40 27" fill="none" stroke="#eaf5ee" stroke-width="3.6" stroke-linecap="round"/>
+  <g stroke="#bfe3cd" stroke-width="2.4" stroke-linecap="round" opacity="0.85">
+    <line x1="32" y1="32" x2="18" y2="18"/>
+    <line x1="32" y1="32" x2="47" y2="19"/>
+    <line x1="32" y1="32" x2="19" y2="46"/>
+    <line x1="32" y1="32" x2="46" y2="46"/>
+  </g>
+  <g fill="#eaf5ee">
+    <circle cx="32" cy="32" r="6.5"/>
+    <circle cx="18" cy="18" r="4"/>
+    <circle cx="19" cy="46" r="4"/>
+    <circle cx="46" cy="46" r="4"/>
+  </g>
+  <circle cx="47" cy="19" r="4.2" fill="#f0c45a"/>
 </svg>
