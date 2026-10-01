@@ -92,6 +92,20 @@ CREATE INDEX IF NOT EXISTS idx_members_user ON members (user_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages (conversation_id, sent_at);
 `;
 
+/**
+ * Additive column migrations for databases created before rooms existed.
+ * `CREATE TABLE IF NOT EXISTS` never alters an existing table, so a DB from an
+ * earlier version keeps its old `users`/`conversations` shape. Each statement is
+ * run and its "duplicate column" error ignored, so this is safe to run every
+ * startup and on a brand-new database alike. NOT NULL needs a constant default;
+ * rows predating rooms get `room_id = ''` and simply belong to no room (and
+ * expire within the retention window anyway).
+ */
+export const MIGRATIONS = [
+  "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE conversations ADD COLUMN room_id TEXT NOT NULL DEFAULT ''",
+];
+
 export interface NewUser {
   username: string;
   displayName: string;

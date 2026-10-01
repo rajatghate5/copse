@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Copse">
+  <rect width="64" height="64" rx="16" fill="#2f6b4f"/>
+  <path d="M30 51A19 19 0 0 1 11 32C11 16 30 8 55 8 55 32 44 51 30 51Z" fill="none" stroke="#eaf5ee" stroke-width="3.6" stroke-linejoin="round"/>
+  <path d="M12 51C18 40 27 33 40 27" fill="none" stroke="#eaf5ee" stroke-width="3.6" stroke-linecap="round"/>
+</svg>

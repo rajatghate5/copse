@@ -18,6 +18,7 @@ import type {
 } from '@copse/protocol';
 import {
   HISTORY_PAGE,
+  MIGRATIONS,
   RETENTION_MS,
   SCHEMA,
   newId,
@@ -41,6 +42,12 @@ export class SqliteStore implements Store {
   }
 
   async init(): Promise<void> {
+    // Migrate first: add columns a pre-rooms database lacks, so the schema's
+    // room_id index can be created. On a fresh database these ALTERs hit a
+    // missing table and are ignored; SCHEMA then creates everything correctly.
+    for (const sql of MIGRATIONS) {
+      try { this.db.exec(sql); } catch { /* table absent (fresh) or column present */ }
+    }
     this.db.exec(SCHEMA);
   }
 
