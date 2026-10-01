@@ -34,6 +34,17 @@ export const MAX_MEMBERS = 16;
 export const KEY_B64_MAX = 128;
 
 /**
+ * Room caps. A room is a sealed-off space; a member may belong to a few of them,
+ * and each holds a small circle. The admin (the bootstrap account) is exempt from
+ * the per-user limit so they can run as many rooms as they like. One source of
+ * truth, shared by server (enforcement) and client (greying out "create").
+ */
+export const ROOM_MAX_MEMBERS = 10;
+export const MAX_ROOMS_PER_USER = 3;
+export const MAX_ROOM_NAME_LENGTH = 40;
+export const INVITE_CODE_MAX = 48;
+
+/**
  * Strip ASCII control characters and DEL from anything a stranger typed.
  *
  * Display names are printed into server logs (a terminal) and into other
@@ -80,6 +91,22 @@ export interface UserSummary {
   readonly username: string;
   readonly displayName: string;
   readonly keys: PublicKeys;
+  /** The bootstrap account. Shown as an "admin" badge; may create unlimited rooms. */
+  readonly isAdmin: boolean;
+}
+
+/**
+ * A room as a member sees it: a sealed-off space with its own directory and
+ * conversations. The invite code is only ever sent to members, so it is safe to
+ * carry here - the server never hands a RoomSummary to a non-member.
+ */
+export interface RoomSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly inviteCode: string;
+  readonly memberCount: number;
+  readonly createdBy: string;
+  readonly createdAt: number;
 }
 
 export const MIN_USERNAME_LENGTH = 3;
@@ -96,9 +123,29 @@ export function cleanUsername(raw: unknown): string | null {
   return s.length >= MIN_USERNAME_LENGTH && s.length <= MAX_USERNAME_LENGTH ? s : null;
 }
 
+/** A room name a stranger typed: control chars stripped, bounded, never empty. */
+export function cleanRoomName(raw: unknown): string {
+  const s = typeof raw === 'string' ? raw : '';
+  return s.replace(CONTROL_CHARS, '').trim().slice(0, MAX_ROOM_NAME_LENGTH) || 'room';
+}
+
+/**
+ * Normalise an invite code to the same URL-safe alphabet the server mints
+ * (lowercase letters, digits, hyphens). Returns null if nothing plausible
+ * remains, so the caller rejects it before any lookup. Shape only - the code is
+ * validated by looking it up, not by decoding.
+ */
+export function cleanInviteCode(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+  return s.length >= 4 && s.length <= INVITE_CODE_MAX ? s : null;
+}
+
 /** A conversation as the client lists it. Title is ciphertext until decrypted. */
 export interface ConversationSummary {
   readonly id: string;
+  /** The room this conversation belongs to. Conversations never cross rooms. */
+  readonly roomId: string;
   readonly kind: ConversationKind;
   /** base64 ciphertext of the title, or null for a direct chat (named by peer). */
   readonly titleCiphertext: string | null;
@@ -156,9 +203,20 @@ export type ClientMessage =
 export type ServerMessage =
   /** First frame on every socket, before auth completes. Carries the version. */
   | { t: 'hello'; version: number }
-  /** Sent after the socket authenticates: who you are and the current roster. */
-  | { t: 'ready'; you: UserSummary; users: UserSummary[]; conversations: ConversationSummary[] }
-  /** A user joined the directory, so clients can wrap keys to them. */
+  /**
+   * Sent after the socket authenticates. The socket is scoped to one room, so
+   * `users` and `conversations` are that room's only; `room` is the current room
+   * and `rooms` is every room the user belongs to (for the switcher).
+   */
+  | {
+      t: 'ready';
+      you: UserSummary;
+      room: RoomSummary;
+      rooms: RoomSummary[];
+      users: UserSummary[];
+      conversations: ConversationSummary[];
+    }
+  /** A user joined the current room's directory, so clients can wrap keys to them. */
   | { t: 'user'; user: UserSummary }
   | { t: 'conversation'; conversation: ConversationSummary }
   /** A wrapped conversation key addressed to the receiving client. */
@@ -174,6 +232,7 @@ export type ErrorCode =
   | 'bad_version'
   | 'bad_message'
   | 'not_a_member'
+  | 'not_a_room_member'
   | 'no_such_conversation'
   | 'rate_limited'
   | 'too_large';

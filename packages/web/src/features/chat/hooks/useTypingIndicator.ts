@@ -4,8 +4,8 @@
  * this hook just projects them for the active conversation.
  */
 
-import { useChatStore } from '../store/chatStore.ts';
-import { useAuth } from '../../auth/authStore.ts';
+import { useChatStore } from '@/features/chat/store/chatStore.ts';
+import { useAuth } from '@/features/auth/authStore.ts';
 
 const EMPTY: string[] = [];
 

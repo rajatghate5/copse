@@ -15,10 +15,18 @@ import type { ServerWebSocket } from 'bun';
 /** Per-socket state Bun carries for us on ws.data. */
 export interface SocketData {
   userId: string;
+  /** The one room this socket is scoped to. Switching rooms reconnects. */
+  roomId: string;
   /** Rolling message counter for rate limiting. */
   rate: { count: number; until: number };
 }
 
+/**
+ * The hub is room-aware. Because a socket is scoped to a single room (a user may
+ * hold several sockets, one per open room), every delivery names the room it is
+ * for, and only sockets viewing that room receive it. That keeps one room's
+ * directory and messages from ever leaking onto a socket viewing another.
+ */
 export class Hub {
   private sockets = new Map<string, Set<ServerWebSocket<SocketData>>>();
 
@@ -35,26 +43,21 @@ export class Hub {
     if (set.size === 0) this.sockets.delete(ws.data.userId);
   }
 
-  /** True if a user has at least one live socket. */
-  isOnline(userId: string): boolean {
-    return this.sockets.has(userId);
-  }
-
-  /** Deliver to every socket a user has open. A no-op if they are offline. */
-  send(userId: string, msg: ServerMessage): void {
+  /** Deliver to a user's sockets that are viewing `roomId`. No-op if none. */
+  send(userId: string, roomId: string, msg: ServerMessage): void {
     const set = this.sockets.get(userId);
     if (!set) return;
     const payload = JSON.stringify(msg);
-    for (const ws of set) ws.send(payload);
+    for (const ws of set) if (ws.data.roomId === roomId) ws.send(payload);
   }
 
-  /** Deliver to several users at once - a conversation's members, typically. */
-  sendMany(userIds: Iterable<string>, msg: ServerMessage): void {
+  /** Deliver to several users' sockets that are viewing `roomId`. */
+  sendMany(userIds: Iterable<string>, roomId: string, msg: ServerMessage): void {
     const payload = JSON.stringify(msg);
     for (const userId of userIds) {
       const set = this.sockets.get(userId);
       if (!set) continue;
-      for (const ws of set) ws.send(payload);
+      for (const ws of set) if (ws.data.roomId === roomId) ws.send(payload);
     }
   }
 }

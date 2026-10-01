@@ -10,9 +10,9 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { VariableSizeList, type ListChildComponentProps } from 'react-window';
-import type { ChatMessage } from '../store/chatStore.ts';
-import { dayLabel } from '../../../lib/format.ts';
-import { MessageItem } from './MessageItem.tsx';
+import type { ChatMessage } from '@/features/chat/store/chatStore.ts';
+import { dayLabel } from '@/lib/format.ts';
+import { MessageItem } from '@/features/chat/components/MessageItem.tsx';
 
 type Row =
   | { kind: 'day'; key: string; label: string }

@@ -6,8 +6,8 @@
  */
 
 import { useCallback } from 'react';
-import { useChatStore, type ChatMessage } from '../store/chatStore.ts';
-import { sendText, signalTyping } from '../engine.ts';
+import { useChatStore, type ChatMessage } from '@/features/chat/store/chatStore.ts';
+import { sendText, signalTyping } from '@/features/chat/engine.ts';
 
 const EMPTY: ChatMessage[] = [];
 

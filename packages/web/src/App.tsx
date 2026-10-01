@@ -5,10 +5,10 @@
  */
 
 import { useEffect } from 'react';
-import { useAuth } from './features/auth/authStore.ts';
-import { AuthScreens } from './features/auth/AuthScreens.tsx';
-import { ChatScreen } from './features/chat/components/ChatScreen.tsx';
-import { Brand, ThemeToggle } from './components/common.tsx';
+import { useAuth } from '@/features/auth/authStore.ts';
+import { AuthScreens } from '@/features/auth/AuthScreens.tsx';
+import { ChatScreen } from '@/features/chat/components/ChatScreen.tsx';
+import { Brand, ThemeToggle } from '@/components/common.tsx';
 
 export function App() {
   const status = useAuth((s) => s.status);

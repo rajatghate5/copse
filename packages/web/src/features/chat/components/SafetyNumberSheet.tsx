@@ -7,8 +7,9 @@
 import { useMemo } from 'react';
 import { base64ToBytes, safetyNumber } from '@copse/crypto';
 import type { UserSummary } from '@copse/protocol';
-import { useAuth } from '../../auth/authStore.ts';
-import { Shield, Check } from '../../../lib/icons.tsx';
+import { useAuth } from '@/features/auth/authStore.ts';
+import { Shield } from '@/assets/svgs/shield/index.tsx';
+import { Check } from '@/assets/svgs/check/index.tsx';
 
 interface Props {
   other: UserSummary;

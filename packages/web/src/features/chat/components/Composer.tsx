@@ -5,7 +5,7 @@
  */
 
 import { useRef, useState } from 'react';
-import { Arrow } from '../../../lib/icons.tsx';
+import { Arrow } from '@/assets/svgs/arrow/index.tsx';
 
 interface Props {
   peerName: string;

@@ -10,7 +10,7 @@
  */
 
 import type { ClientMessage, ServerMessage } from '@copse/protocol';
-import type { Connection } from '../store/chatStore.ts';
+import type { Connection } from '@/features/chat/store/chatStore.ts';
 
 interface Handlers {
   onMessage: (msg: ServerMessage) => void;
@@ -26,6 +26,8 @@ export class SocketService {
   private backoff = MIN_BACKOFF;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private closedByUs = false;
+  /** The room this socket is scoped to; the server refuses an upgrade without it. */
+  private roomId = '';
 
   connect(handlers: Handlers): void {
     this.handlers = handlers;
@@ -33,9 +35,28 @@ export class SocketService {
     this.open(true);
   }
 
+  /** Point future connections at a room. Call before connect, or reopen to switch. */
+  setRoom(roomId: string): void {
+    this.roomId = roomId;
+  }
+
+  /** Tear down the current socket and open a fresh one (used when switching rooms). */
+  reopen(): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.backoff = MIN_BACKOFF;
+    const old = this.ws;
+    this.ws = null;
+    if (old) {
+      old.onopen = old.onmessage = old.onclose = old.onerror = null;
+      try { old.close(); } catch { /* already closing */ }
+    }
+    this.closedByUs = false;
+    this.open(true);
+  }
+
   private url(): string {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    return `${proto}://${location.host}/ws`;
+    return `${proto}://${location.host}/ws?room=${encodeURIComponent(this.roomId)}`;
   }
 
   private open(first: boolean): void {

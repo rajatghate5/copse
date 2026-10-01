@@ -8,7 +8,7 @@
  * stores as ciphertext so a second device can fetch and unlock it.
  */
 
-import type { PublicKeys } from './index.ts';
+import type { PublicKeys, RoomSummary } from './index.ts';
 
 /** A passphrase-sealed blob, all base64. The server stores it, never opens it. */
 export interface VaultBlob {
@@ -17,9 +17,17 @@ export interface VaultBlob {
   readonly ciphertext: string;
 }
 
-/** POST /api/register - claim a username, publish public keys, deposit the vault. */
+/**
+ * POST /api/register - create an account and land it in a room. A new account
+ * arrives one of two ways, never both:
+ *   - `joinCode`: follow someone's invite into an existing room, OR
+ *   - `bootstrap`: present the operator's secret to mint the first room as admin.
+ * The optional `roomName` names the room when bootstrapping.
+ */
 export interface RegisterRequest {
-  readonly invite: string;
+  readonly joinCode?: string;
+  readonly bootstrap?: string;
+  readonly roomName?: string;
   readonly username: string;
   readonly displayName: string;
   readonly keys: PublicKeys;
@@ -28,6 +36,28 @@ export interface RegisterRequest {
 
 export interface RegisterResponse {
   readonly userId: string;
+  /** The room the new account joined or created, so the client can enter it. */
+  readonly roomId: string;
+}
+
+/** POST /api/rooms - an authenticated user mints a new room (admin: unlimited). */
+export interface CreateRoomRequest {
+  readonly name: string;
+}
+
+/** POST /api/rooms/join - an authenticated user joins an existing room by code. */
+export interface JoinRoomRequest {
+  readonly joinCode: string;
+}
+
+/** One room, echoed back after create/join/rotate. */
+export interface RoomResponse {
+  readonly room: RoomSummary;
+}
+
+/** GET /api/rooms - every room the authenticated user belongs to. */
+export interface RoomsResponse {
+  readonly rooms: RoomSummary[];
 }
 
 /** GET /api/vault/:username - fetch the sealed vault to unlock on a new device. */

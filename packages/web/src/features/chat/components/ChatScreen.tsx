@@ -5,21 +5,25 @@
  */
 
 import { useMemo, useState } from 'react';
-import { useChatStore } from '../store/chatStore.ts';
-import { useAuth } from '../../auth/authStore.ts';
-import { useSocket } from '../hooks/useSocket.ts';
-import { useChat } from '../hooks/useChat.ts';
-import { useTypingIndicator } from '../hooks/useTypingIndicator.ts';
-import { conversationName, conversationSubtitle, otherMemberIds } from '../selectors.ts';
-import { initials } from '../../../lib/format.ts';
-import { MessageList } from './MessageList.tsx';
-import { Composer } from './Composer.tsx';
-import { ConversationList } from './ConversationList.tsx';
-import { SafetyNumberSheet } from './SafetyNumberSheet.tsx';
-import { NewConversationDialog } from './NewConversationDialog.tsx';
-import { Brand, ThemeToggle } from '../../../components/common.tsx';
-import { getInvite } from '../../../lib/api.ts';
-import { ChevronLeft, Lock, Shield, LogOut, LinkIcon } from '../../../lib/icons.tsx';
+import { useChatStore } from '@/features/chat/store/chatStore.ts';
+import { useAuth } from '@/features/auth/authStore.ts';
+import { useSocket } from '@/features/chat/hooks/useSocket.ts';
+import { useChat } from '@/features/chat/hooks/useChat.ts';
+import { useTypingIndicator } from '@/features/chat/hooks/useTypingIndicator.ts';
+import { conversationName, conversationSubtitle, otherMemberIds } from '@/features/chat/selectors.ts';
+import { initials } from '@/lib/format.ts';
+import { MessageList } from '@/features/chat/components/MessageList.tsx';
+import { Composer } from '@/features/chat/components/Composer.tsx';
+import { ConversationList } from '@/features/chat/components/ConversationList.tsx';
+import { SafetyNumberSheet } from '@/features/chat/components/SafetyNumberSheet.tsx';
+import { NewConversationDialog } from '@/features/chat/components/NewConversationDialog.tsx';
+import { RoomSwitcher } from '@/features/rooms/RoomSwitcher.tsx';
+import { ProfilePanel } from '@/features/profile/ProfilePanel.tsx';
+import { Brand, ThemeToggle } from '@/components/common.tsx';
+import { ChevronLeft } from '@/assets/svgs/chevron-left/index.tsx';
+import { Lock } from '@/assets/svgs/lock/index.tsx';
+import { Shield } from '@/assets/svgs/shield/index.tsx';
+import { Gear } from '@/assets/svgs/gear/index.tsx';
 
 export function ChatScreen() {
   useSocket();
@@ -30,24 +34,11 @@ export function ChatScreen() {
   const activeId = useChatStore((s) => s.activeId);
   const setActive = useChatStore((s) => s.setActive);
   const me = useAuth((s) => s.me!);
-  const signOut = useAuth((s) => s.signOut);
 
   const [view, setView] = useState<'list' | 'thread'>('list');
   const [showNew, setShowNew] = useState(false);
   const [showSafety, setShowSafety] = useState(false);
-  const [inviteMsg, setInviteMsg] = useState<string | null>(null);
-
-  const copyInviteLink = async () => {
-    try {
-      const code = await getInvite();
-      const link = `${location.origin}/?invite=${encodeURIComponent(code)}`;
-      await navigator.clipboard.writeText(link);
-      setInviteMsg('Invite link copied — share it with a friend.');
-    } catch {
-      setInviteMsg('Could not copy the invite link.');
-    }
-    setTimeout(() => setInviteMsg(null), 3500);
-  };
+  const [showProfile, setShowProfile] = useState(false);
 
   const active = activeId ? conversations[activeId] : undefined;
   const { messages, send, notifyTyping } = useChat(activeId);
@@ -69,12 +60,10 @@ export function ChatScreen() {
       <div className="topbar">
         <Brand />
         <span className="spacer" />
-        <span className="who-badge">Signed in as <b>@{me.username}</b></span>
-        <button className="ghost-btn" aria-label="Copy invite link" onClick={() => void copyInviteLink()}><LinkIcon /></button>
+        <RoomSwitcher />
         <ThemeToggle />
-        <button className="ghost-btn" aria-label="Sign out" onClick={() => void signOut()}><LogOut /></button>
+        <button className="ghost-btn" aria-label="Profile and settings" onClick={() => setShowProfile(true)}><Gear /></button>
       </div>
-      {inviteMsg && <div className="conn-banner waking" style={{ borderRadius: 12, marginBottom: 10 }}>{inviteMsg}</div>}
 
       <div className="stage">
         <div className="app" data-view={view}>

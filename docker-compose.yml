@@ -2,7 +2,9 @@
 # server and the built client. This is the mode for same-room, no-internet play
 # (a phone hotspot) - everyone opens http://<this-machine-ip>:4040.
 #
-#   COPSE_INVITE=copse-4evr docker compose up -d   ->   http://localhost:4040
+#   COPSE_BOOTSTRAP=some-secret docker compose up -d   ->   http://localhost:4040
+# Then open http://<this-machine-ip>:4040/?bootstrap=some-secret once to create
+# the first room; everyone else joins with the invite link you share.
 services:
   copse:
     container_name: copse
@@ -10,8 +12,8 @@ services:
     restart: unless-stopped
     environment:
       PORT: 4040
-      # The invite code friends need to register. Override on the command line.
-      COPSE_INVITE: ${COPSE_INVITE:-copse-4evr}
+      # The operator secret used once to mint the first room. Override on the CLI.
+      COPSE_BOOTSTRAP: ${COPSE_BOOTSTRAP:-copse-admin}
       # Store the SQLite file on a named volume so messages survive a restart.
       COPSE_DB: /data/copse.db
     volumes:

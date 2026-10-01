@@ -9,15 +9,17 @@
  */
 
 import type { ServerMessage, ConversationKind } from '@copse/protocol';
-import { useAuth } from '../auth/authStore.ts';
-import { useChatStore, type ChatMessage } from './store/chatStore.ts';
-import { SocketService } from './services/socket.ts';
-import { dequeue, enqueue, pending } from '../../lib/idb.ts';
+import { useAuth } from '@/features/auth/authStore.ts';
+import { useRoomStore } from '@/features/rooms/roomStore.ts';
+import { useChatStore, type ChatMessage } from '@/features/chat/store/chatStore.ts';
+import { SocketService } from '@/features/chat/services/socket.ts';
+import { dequeue, enqueue, pending } from '@/lib/idb.ts';
 
 export const socket = new SocketService();
 
-/** Connect and route every frame. Safe to call again after a full sign-out. */
-export function startEngine(): void {
+/** Connect to one room and route every frame. Safe to call again after sign-out. */
+export function startEngine(roomId: string): void {
+  socket.setRoom(roomId);
   socket.connect({
     onState: (state) => {
       useChatStore.getState().setConnection(state);
@@ -27,9 +29,21 @@ export function startEngine(): void {
   });
 }
 
+/** Leave the current room and reconnect scoped to another one. */
+export function switchRoom(roomId: string): void {
+  if (useRoomStore.getState().currentRoomId === roomId) return;
+  useRoomStore.getState().setCurrent(roomId);
+  // A room is a sealed world: drop the old room's directory, conversations and
+  // messages so nothing bleeds across, then reopen the socket into the new one.
+  useChatStore.getState().reset();
+  socket.setRoom(roomId);
+  socket.reopen();
+}
+
 export function stopEngine(): void {
   socket.close();
   useChatStore.getState().reset();
+  useRoomStore.getState().reset();
 }
 
 async function handleFrame(msg: ServerMessage): Promise<void> {
@@ -42,6 +56,10 @@ async function handleFrame(msg: ServerMessage): Promise<void> {
       return;
 
     case 'ready':
+      // The server's identity summary is authoritative (it carries the admin flag).
+      useAuth.getState().setMe(msg.you);
+      useRoomStore.getState().setRooms(msg.rooms);
+      useRoomStore.getState().setCurrent(msg.room.id);
       store.applyReady(msg.users, msg.conversations);
       return;
 

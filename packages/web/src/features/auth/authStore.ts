@@ -23,9 +23,10 @@ import {
   type Vault,
 } from '@copse/crypto';
 import type { UserSummary } from '@copse/protocol';
-import * as api from '../../lib/api.ts';
-import { KeyManager } from '../chat/crypto/keyManager.ts';
-import { clearAccount, loadAccount, saveAccount, wipe, type StoredAccount } from '../../lib/idb.ts';
+import * as api from '@/lib/api.ts';
+import { KeyManager } from '@/features/chat/crypto/keyManager.ts';
+import { useRoomStore } from '@/features/rooms/roomStore.ts';
+import { clearAccount, loadAccount, saveAccount, wipe, type StoredAccount } from '@/lib/idb.ts';
 
 export type AuthStatus = 'loading' | 'signedOut' | 'locked' | 'ready';
 
@@ -39,9 +40,18 @@ interface AuthState {
   error: string | null;
 
   boot: () => Promise<void>;
-  register: (args: { invite: string; username: string; displayName: string; passphrase: string }) => Promise<void>;
+  register: (args: {
+    joinCode?: string;
+    bootstrap?: string;
+    roomName?: string;
+    username: string;
+    displayName: string;
+    passphrase: string;
+  }) => Promise<void>;
   unlock: (passphrase: string) => Promise<void>;
   signInOnNewDevice: (args: { username: string; passphrase: string }) => Promise<void>;
+  /** Replace the identity summary with the server's authoritative one (admin flag). */
+  setMe: (me: UserSummary) => void;
   lock: () => void;
   signOut: () => Promise<void>;
   clearError: () => void;
@@ -61,7 +71,12 @@ async function establishSession(username: string, identity: Identity): Promise<s
   return userId;
 }
 
-async function ready(set: (p: Partial<AuthState>) => void, account: StoredAccount, identity: Identity) {
+async function ready(
+  set: (p: Partial<AuthState>) => void,
+  account: StoredAccount,
+  identity: Identity,
+  isAdmin = false,
+) {
   const km = new KeyManager(identity);
   await km.hydrate();
   const me: UserSummary = {
@@ -72,6 +87,9 @@ async function ready(set: (p: Partial<AuthState>) => void, account: StoredAccoun
       encPub: bytesToBase64(identity.encPub),
       sigPub: bytesToBase64(identity.sigPub),
     },
+    // The server's `ready` frame confirms this authoritatively (see engine.setMe);
+    // here it is known only when this very session bootstrapped the first room.
+    isAdmin,
   };
   set({ status: 'ready', account, identity, km, me, busy: false, error: null });
 }
@@ -90,15 +108,17 @@ export const useAuth = create<AuthState>((set, get) => ({
     set({ account, status: account ? 'locked' : 'signedOut' });
   },
 
-  async register({ invite, username, displayName, passphrase }) {
+  async register({ joinCode, bootstrap, roomName, username, displayName, passphrase }) {
     set({ busy: true, error: null });
     try {
       const mnemonic = generateMnemonicPhrase();
       const identity = identityFromMnemonic(mnemonic);
       const vault = await sealMnemonic(passphrase, mnemonic);
       const pub = publicIdentity(identity);
-      const { userId } = await api.register({
-        invite,
+      const { userId, roomId } = await api.register({
+        joinCode,
+        bootstrap,
+        roomName,
         username,
         displayName,
         keys: { encPub: bytesToBase64(pub.encPub), sigPub: bytesToBase64(pub.sigPub) },
@@ -106,8 +126,10 @@ export const useAuth = create<AuthState>((set, get) => ({
       });
       const account: StoredAccount = { userId, username, displayName, vault: b64(vault) };
       await saveAccount(account);
+      // Enter the room this account just joined or created (held in memory only).
+      useRoomStore.getState().setCurrent(roomId);
       await establishSession(username, identity);
-      await ready(set, account, identity);
+      await ready(set, account, identity, Boolean(bootstrap));
     } catch (e) {
       set({ busy: false, error: (e as Error).message || 'could not create the account' });
     }
@@ -153,6 +175,10 @@ export const useAuth = create<AuthState>((set, get) => ({
         : 'That passphrase did not unlock the account.';
       set({ busy: false, error: msg });
     }
+  },
+
+  setMe(me) {
+    set({ me });
   },
 
   lock() {

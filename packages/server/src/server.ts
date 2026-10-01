@@ -1,11 +1,12 @@
 /**
- * The server: REST for account setup and login, a WebSocket for everything else.
- *
- * Two rules run through all of it, inherited from No Mercy and extended:
+ * The server: REST for account setup, login and rooms; a WebSocket for the chat
+ * itself. Three rules run through all of it:
  *   1. The client sends intent; the server owns state. Every inbound field is
  *      validated against the socket's authenticated identity before it acts.
  *   2. The server never sees plaintext. Message bodies, titles and wrapped keys
  *      are opaque strings it routes and stores but cannot read.
+ *   3. Rooms are sealed worlds. A socket is scoped to one room, and the directory,
+ *      conversations and fan-out it sees are that room's alone.
  *
  * `createServer` returns a plain Bun.serve options object so it can be started
  * for real (main.ts) or against an in-memory store (tests) with no difference.
@@ -15,24 +16,32 @@ import { Hono } from 'hono';
 import type { ServerWebSocket } from 'bun';
 import {
   cleanB64,
+  cleanInviteCode,
   cleanName,
+  cleanRoomName,
   cleanUsername,
   parseClientMessage,
   KEY_B64_MAX,
   MAX_CIPHERTEXT_LENGTH,
   MAX_MEMBERS,
+  MAX_ROOMS_PER_USER,
   MAX_WRAPPED_KEY_LENGTH,
   PROTOCOL_VERSION,
+  ROOM_MAX_MEMBERS,
   type ClientMessage,
   type ServerMessage,
   type RegisterRequest,
+  type CreateRoomRequest,
+  type JoinRoomRequest,
   type ChallengeRequest,
   type LoginRequest,
+  type RoomSummary,
   type VaultBlob,
 } from '@copse/protocol';
 import { verifyChallenge, base64ToBytes } from '@copse/crypto';
 import { Sessions, SESSION_COOKIE, readCookie } from './auth.ts';
 import { Hub, type SocketData } from './hub.ts';
+import { uniqueInviteCode } from './rooms.ts';
 import type { Store } from './store.ts';
 
 /** Ported from No Mercy: a coarse per-socket flood guard. */
@@ -41,8 +50,12 @@ const RATE_LIMIT_WINDOW_MS = 5000;
 
 export interface ServerOptions {
   store: Store;
-  /** The one invite code that authorises registration. Empty closes signup. */
-  invite: string;
+  /**
+   * The operator's secret. Presented once via the signup flow it mints the first
+   * room and makes that account the admin. Empty means no first room can be made,
+   * so the server stays closed until it is set.
+   */
+  bootstrap: string;
   /** Directory of the built web client, served for all non-API routes. */
   staticDir?: string;
   /** Set Secure on the session cookie. True in production behind HTTPS. */
@@ -50,26 +63,39 @@ export interface ServerOptions {
 }
 
 export interface CopseServer {
-  fetch: (req: Request, server: import('bun').Server<SocketData>) => Response | Promise<Response> | undefined;
+  fetch: (
+    req: Request,
+    server: import('bun').Server<SocketData>,
+  ) => Response | Promise<Response | undefined> | undefined;
   websocket: import('bun').WebSocketHandler<SocketData>;
   /** Exposed for tests. */
   sessions: Sessions;
 }
 
 export function createServer(opts: ServerOptions): CopseServer {
-  const { store, invite } = opts;
+  const { store, bootstrap } = opts;
   const sessions = new Sessions();
   const hub = new Hub();
 
   const app = new Hono();
 
+  /** The signed-in user id behind a request's cookie, or null. */
+  const whoami = (c: { req: { header(name: string): string | undefined } }): string | null =>
+    sessions.resolve(readCookie(c.req.header('cookie') ?? null, SESSION_COOKIE));
+
+  /** Mint an invite code the store confirms is free. */
+  const freshCode = () => uniqueInviteCode((code) => store.getRoomByCode(code).then(Boolean));
+
   app.get('/health', (c) => c.text('ok'));
 
-  // --- registration: claim a username, publish keys, deposit the vault -------
+  // --- registration: create an account and land it in a room -----------------
+  // A new account arrives one of two ways: by following an invite into an
+  // existing room (joinCode), or by presenting the operator's secret to mint the
+  // first room as admin (bootstrap). The landing room is resolved before the user
+  // is created, so a bad code never leaves an orphaned account.
   app.post('/api/register', async (c) => {
     const body = (await c.req.json().catch(() => null)) as RegisterRequest | null;
     if (!body) return c.json({ error: 'bad request' }, 400);
-    if (!invite || body.invite !== invite) return c.json({ error: 'invalid invite' }, 403);
 
     const username = cleanUsername(body.username);
     if (!username) return c.json({ error: 'bad username' }, 400);
@@ -85,24 +111,44 @@ export function createServer(opts: ServerOptions): CopseServer {
     const ciphertext = cleanB64(body.vault?.ciphertext, MAX_CIPHERTEXT_LENGTH);
     if (!salt || !iv || !ciphertext) return c.json({ error: 'bad vault' }, 400);
 
-    if (await store.getUserByUsername(username)) {
-      return c.json({ error: 'username taken' }, 409);
+    let isAdmin = false;
+    let bootstrapRoomName: string | null = null;
+    let joinRoom: RoomSummary | null = null;
+    if (body.bootstrap) {
+      if (!bootstrap || body.bootstrap !== bootstrap) return c.json({ error: 'invalid bootstrap' }, 403);
+      isAdmin = true;
+      bootstrapRoomName = cleanRoomName(body.roomName);
+    } else {
+      const code = cleanInviteCode(body.joinCode);
+      if (!code) return c.json({ error: 'an invite is required' }, 403);
+      joinRoom = await store.getRoomByCode(code);
+      if (!joinRoom) return c.json({ error: 'invalid invite' }, 403);
+      if (joinRoom.memberCount >= ROOM_MAX_MEMBERS) return c.json({ error: 'room is full' }, 403);
     }
 
+    if (await store.getUserByUsername(username)) return c.json({ error: 'username taken' }, 409);
+
     const vault: VaultBlob = { salt, iv, ciphertext };
-    const user = await store.createUser({ username, displayName, encPub, sigPub, vault });
-    // Tell everyone already online, so they can address conversations to the new
-    // member without reconnecting.
-    hub.sendMany(
-      (await store.listUsers()).map((u) => u.id),
-      { t: 'user', user },
-    );
-    return c.json({ userId: user.id });
+    const user = await store.createUser({ username, displayName, encPub, sigPub, vault, isAdmin });
+
+    let roomId: string;
+    if (bootstrapRoomName !== null) {
+      const room = await store.createRoom({ name: bootstrapRoomName, inviteCode: await freshCode(), createdBy: user.id });
+      roomId = room.id;
+    } else {
+      roomId = joinRoom!.id;
+      await store.addRoomMember(roomId, user.id);
+    }
+
+    // Tell the room's online members a new person arrived, so they can wrap
+    // conversation keys to them without reconnecting.
+    hub.sendMany((await store.listUsersInRoom(roomId)).map((u) => u.id), roomId, { t: 'user', user });
+    return c.json({ userId: user.id, roomId });
   });
 
   // --- fetch a sealed vault, to unlock on a new device ----------------------
-  // The blob is ciphertext, useless without the passphrase, so this is public
-  // by username - the same way any login form reveals whether an account exists.
+  // The blob is ciphertext, useless without the passphrase, so this is public by
+  // username - the same way any login form reveals whether an account exists.
   app.get('/api/vault/:username', async (c) => {
     const username = cleanUsername(c.req.param('username'));
     if (!username) return c.json({ error: 'bad username' }, 400);
@@ -111,15 +157,54 @@ export function createServer(opts: ServerOptions): CopseServer {
     return c.json({ vault });
   });
 
-  // --- invite link: a logged-in member reveals the code to share ------------
-  // In this small-group model, members invite members, so an authenticated
-  // session may read the invite code to build a share link. It stays behind the
-  // session, never public.
-  app.get('/api/invite', (c) => {
-    const userId = sessions.resolve(readCookie(c.req.header('cookie') ?? null, SESSION_COOKIE));
-    if (!userId) return c.json({ error: 'unauthenticated' }, 401);
-    if (!invite) return c.json({ error: 'invites are closed' }, 404);
-    return c.json({ invite });
+  // --- rooms: create, join, list, rotate (all authenticated) ----------------
+
+  app.post('/api/rooms', async (c) => {
+    const me = whoami(c);
+    const meUser = me ? await store.getUser(me) : null;
+    if (!me || !meUser) return c.json({ error: 'unauthenticated' }, 401);
+    const body = (await c.req.json().catch(() => null)) as CreateRoomRequest | null;
+    const name = cleanRoomName(body?.name);
+    // Members may hold only a few rooms; the admin is uncapped.
+    if (!meUser.isAdmin && (await store.userRoomCount(me)) >= MAX_ROOMS_PER_USER) {
+      return c.json({ error: 'room limit reached' }, 403);
+    }
+    const room = await store.createRoom({ name, inviteCode: await freshCode(), createdBy: me });
+    return c.json({ room });
+  });
+
+  app.post('/api/rooms/join', async (c) => {
+    const me = whoami(c);
+    const meUser = me ? await store.getUser(me) : null;
+    if (!me || !meUser) return c.json({ error: 'unauthenticated' }, 401);
+    const body = (await c.req.json().catch(() => null)) as JoinRoomRequest | null;
+    const code = cleanInviteCode(body?.joinCode);
+    if (!code) return c.json({ error: 'bad code' }, 400);
+    const room = await store.getRoomByCode(code);
+    if (!room) return c.json({ error: 'invalid invite' }, 404);
+    if (await store.isRoomMember(room.id, me)) return c.json({ room });
+    if (room.memberCount >= ROOM_MAX_MEMBERS) return c.json({ error: 'room is full' }, 403);
+    if (!meUser.isAdmin && (await store.userRoomCount(me)) >= MAX_ROOMS_PER_USER) {
+      return c.json({ error: 'room limit reached' }, 403);
+    }
+    await store.addRoomMember(room.id, me);
+    hub.sendMany((await store.listUsersInRoom(room.id)).map((u) => u.id), room.id, { t: 'user', user: meUser });
+    return c.json({ room: (await store.getRoom(room.id)) ?? room });
+  });
+
+  app.get('/api/rooms', async (c) => {
+    const me = whoami(c);
+    if (!me) return c.json({ error: 'unauthenticated' }, 401);
+    return c.json({ rooms: await store.listRoomsForUser(me) });
+  });
+
+  app.post('/api/rooms/:id/rotate', async (c) => {
+    const me = whoami(c);
+    if (!me) return c.json({ error: 'unauthenticated' }, 401);
+    const roomId = c.req.param('id');
+    if (!(await store.isRoomMember(roomId, me))) return c.json({ error: 'not a member' }, 403);
+    await store.setRoomInviteCode(roomId, await freshCode());
+    return c.json({ room: await store.getRoom(roomId) });
   });
 
   // --- login step 1: get a nonce to sign ------------------------------------
@@ -143,8 +228,6 @@ export function createServer(opts: ServerOptions): CopseServer {
     if (!user) return c.json({ error: 'no such user' }, 404);
 
     const pending = sessions.takeChallenge(user.id);
-    // The nonce must be the exact one we issued (not expired, not reused) AND the
-    // signature must verify against this user's registered signing key.
     if (
       !pending ||
       pending !== body.challenge ||
@@ -201,13 +284,14 @@ export function createServer(opts: ServerOptions): CopseServer {
 
   async function handle(ws: ServerWebSocket<SocketData>, msg: ClientMessage): Promise<void> {
     const me = ws.data.userId;
+    const room = ws.data.roomId;
     switch (msg.t) {
       case 'createConversation': {
         if (!Array.isArray(msg.members) || msg.members.length === 0 || msg.members.length > MAX_MEMBERS) {
           return send(ws, { t: 'error', code: 'bad_message', message: 'bad member list' });
         }
-        // The creator must be in their own conversation, and every member must be
-        // a real, distinct user with a validly-sized wrapped key.
+        // Every member must be a distinct member OF THIS ROOM with a validly-sized
+        // wrapped key - you cannot pull someone from another room into a chat.
         const seen = new Set<string>();
         for (const m of msg.members) {
           if (typeof m.userId !== 'string' || seen.has(m.userId)) {
@@ -217,8 +301,8 @@ export function createServer(opts: ServerOptions): CopseServer {
           if (!cleanB64(m.wrappedKey, MAX_WRAPPED_KEY_LENGTH)) {
             return send(ws, { t: 'error', code: 'bad_message', message: 'bad wrapped key' });
           }
-          if (!(await store.getUser(m.userId))) {
-            return send(ws, { t: 'error', code: 'bad_message', message: 'unknown member' });
+          if (!(await store.isRoomMember(room, m.userId))) {
+            return send(ws, { t: 'error', code: 'not_a_room_member', message: 'member not in room' });
           }
         }
         if (!seen.has(me)) {
@@ -229,16 +313,17 @@ export function createServer(opts: ServerOptions): CopseServer {
           return send(ws, { t: 'error', code: 'bad_message', message: 'bad title' });
         }
         const conv = await store.createConversation({
+          roomId: room,
           kind: msg.kind === 'group' ? 'group' : 'direct',
           titleCiphertext: title,
           createdBy: me,
           members: msg.members,
         });
         // Each member learns of the conversation and receives their own wrapped
-        // key - and only their own.
+        // key - and only their own - on their socket for this room.
         for (const m of msg.members) {
-          hub.send(m.userId, { t: 'conversation', conversation: conv });
-          hub.send(m.userId, { t: 'key', conversationId: conv.id, wrappedKey: m.wrappedKey });
+          hub.send(m.userId, room, { t: 'conversation', conversation: conv });
+          hub.send(m.userId, room, { t: 'key', conversationId: conv.id, wrappedKey: m.wrappedKey });
         }
         return;
       }
@@ -261,9 +346,7 @@ export function createServer(opts: ServerOptions): CopseServer {
           ciphertext,
           signature,
         });
-        // Fan out to every member, including the sender (so their other tabs and
-        // their own view converge on the server's id and timestamp).
-        hub.sendMany(await store.memberIds(msg.conversationId), { t: 'message', message: stored });
+        hub.sendMany(await store.memberIds(msg.conversationId), room, { t: 'message', message: stored });
         return;
       }
 
@@ -283,7 +366,7 @@ export function createServer(opts: ServerOptions): CopseServer {
       case 'typing': {
         if (!(await store.isMember(msg.conversationId, me))) return;
         const others = (await store.memberIds(msg.conversationId)).filter((id) => id !== me);
-        hub.sendMany(others, {
+        hub.sendMany(others, room, {
           t: 'typing',
           state: { userId: me, conversationId: msg.conversationId, typing: msg.typing === true },
         });
@@ -297,13 +380,19 @@ export function createServer(opts: ServerOptions): CopseServer {
 
   return {
     sessions,
-    fetch(req, server) {
+    async fetch(req, server) {
       const url = new URL(req.url);
       if (url.pathname === '/ws') {
         const userId = sessions.resolve(readCookie(req.headers.get('cookie'), SESSION_COOKIE));
         if (!userId) return new Response('unauthorized', { status: 401 });
+        // The socket is scoped to one room, named on the upgrade URL. You must be
+        // a member of it, or there is nothing to view.
+        const roomId = url.searchParams.get('room') ?? '';
+        if (!roomId || !(await store.isRoomMember(roomId, userId))) {
+          return new Response('forbidden', { status: 403 });
+        }
         const ok = server.upgrade(req, {
-          data: { userId, rate: { count: 0, until: 0 } } satisfies SocketData,
+          data: { userId, roomId, rate: { count: 0, until: 0 } } satisfies SocketData,
         });
         return ok ? undefined : new Response('upgrade failed', { status: 400 });
       }
@@ -314,14 +403,17 @@ export function createServer(opts: ServerOptions): CopseServer {
         hub.add(ws);
         send(ws, { t: 'hello', version: PROTOCOL_VERSION });
         const me = ws.data.userId;
-        const [you, users, conversations] = await Promise.all([
+        const roomId = ws.data.roomId;
+        const [you, room, rooms, users, conversations] = await Promise.all([
           store.getUser(me),
-          store.listUsers(),
-          store.listConversationsForUser(me),
+          store.getRoom(roomId),
+          store.listRoomsForUser(me),
+          store.listUsersInRoom(roomId),
+          store.listConversationsForUser(me, roomId),
         ]);
-        if (you) send(ws, { t: 'ready', you, users, conversations });
-        // Deliver this user's wrapped conversation keys, so a fresh session or a
-        // new device can decrypt history. Each blob is sealed to them alone.
+        if (you && room) send(ws, { t: 'ready', you, room, rooms, users, conversations });
+        // Deliver this user's wrapped conversation keys for this room, so a fresh
+        // session or a new device can decrypt history. Each blob is sealed to them.
         for (const conv of conversations) {
           const wrappedKey = await store.wrappedKeyFor(conv.id, me);
           if (wrappedKey) send(ws, { t: 'key', conversationId: conv.id, wrappedKey });

@@ -10,6 +10,10 @@ import type {
   LoginRequest,
   PublicKeys,
   RegisterRequest,
+  RegisterResponse,
+  RoomResponse,
+  RoomsResponse,
+  RoomSummary,
   VaultBlob,
   VaultResponse,
 } from '@copse/protocol';
@@ -34,7 +38,7 @@ export class ApiError extends Error {
   }
 }
 
-export function register(req: RegisterRequest): Promise<{ userId: string }> {
+export function register(req: RegisterRequest): Promise<RegisterResponse> {
   return post('/api/register', req);
 }
 
@@ -57,11 +61,28 @@ export function logout(): Promise<unknown> {
   return post('/api/logout', {});
 }
 
-/** The current invite code, for a logged-in member to build a share link. */
-export async function getInvite(): Promise<string> {
-  const res = await fetch('/api/invite', { credentials: 'include' });
-  if (!res.ok) throw new ApiError(res.status, 'could not get the invite');
-  return ((await res.json()) as { invite: string }).invite;
+// --- rooms ------------------------------------------------------------------
+
+/** Every room the signed-in user belongs to (each carries its invite code). */
+export async function listRooms(): Promise<RoomSummary[]> {
+  const res = await fetch('/api/rooms', { credentials: 'include' });
+  if (!res.ok) throw new ApiError(res.status, 'could not list rooms');
+  return ((await res.json()) as RoomsResponse).rooms;
+}
+
+/** Mint a new room (admins unlimited; members capped). Returns it with its code. */
+export async function createRoom(name: string): Promise<RoomSummary> {
+  return (await post<RoomResponse>('/api/rooms', { name })).room;
+}
+
+/** Join an existing room by its invite code. */
+export async function joinRoom(joinCode: string): Promise<RoomSummary> {
+  return (await post<RoomResponse>('/api/rooms/join', { joinCode })).room;
+}
+
+/** Rotate a room's invite code, invalidating the old link. */
+export async function rotateRoomCode(roomId: string): Promise<RoomSummary> {
+  return (await post<RoomResponse>(`/api/rooms/${encodeURIComponent(roomId)}/rotate`, {})).room;
 }
 
 export type { PublicKeys };

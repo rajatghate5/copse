@@ -17,7 +17,9 @@ import type { Store } from './store.ts';
 const SWEEP_INTERVAL_MS = 1000 * 60 * 60;
 
 const port = Number(process.env.PORT ?? 4040);
-const invite = process.env.COPSE_INVITE ?? '';
+// The one secret the operator sets. Trimmed, because a value pasted into a
+// hosting dashboard often arrives with a trailing newline.
+const bootstrap = process.env.COPSE_BOOTSTRAP?.trim() ?? '';
 const staticDir = process.env.COPSE_STATIC;
 
 function chooseStore(): { store: Store; where: string } {
@@ -50,13 +52,15 @@ async function sweep(): Promise<void> {
 await sweep();
 setInterval(sweep, SWEEP_INTERVAL_MS);
 
-if (!invite) {
-  console.warn('COPSE_INVITE is unset - registration is closed. Set it to allow new accounts.');
+if (!bootstrap) {
+  console.warn(
+    'COPSE_BOOTSTRAP is unset - no first room can be created. Set it to a secret, then open /?bootstrap=THAT_SECRET once to mint the first room as admin.',
+  );
 }
 
 const app = createServer({
   store,
-  invite,
+  bootstrap,
   staticDir,
   secureCookie: process.env.NODE_ENV === 'production',
 });

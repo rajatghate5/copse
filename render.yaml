@@ -20,8 +20,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # The invite code that gates registration. Set a secret value here.
-      - key: COPSE_INVITE
+      # The operator secret. Set any strong value here, then open
+      # https://<your-service>/?bootstrap=THAT_VALUE once to mint the first room
+      # and become its admin. After that, growth is invite-only.
+      - key: COPSE_BOOTSTRAP
         sync: false
       # Turso holds ciphertext only. Create a db (`turso db create copse`) and
       # paste its URL and a token here. Leave both unset to fall back to a local

@@ -9,9 +9,9 @@
   --them:#eef2ea; --them-ink:#26332b; --me:#2f6b4f; --me-ink:#f2f8f3;
   --exp:#8a7a4a; --exp-bg:#f0ead9; --danger:#b4442f;
   --shadow:0 1px 2px rgba(20,40,30,.06), 0 12px 34px rgba(20,40,30,.10);
-  --sans:"Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --sans:"Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
   --serif:"Fraunces", Georgia, serif;
-  --mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
 }
 :root:not([data-theme="light"]) { @media (prefers-color-scheme: dark) {
   --bg:#0a0f0c; --panel:#141c17; --panel-2:#101713; --ink:#e4ede7; --muted:#9fb0a5; --faint:#7f9186;
@@ -48,7 +48,7 @@ button { font-family: inherit; cursor: pointer; }
 /* ---------- auth cards ---------- */
 .center { margin: auto; width: 100%; max-width: 460px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); padding: 30px 28px; }
-.hero-mark { width: 60px; height: 60px; border-radius: 18px; background: linear-gradient(150deg, #3c7d5d, #22543d); display: grid; place-items: center; margin-bottom: 20px; box-shadow: var(--shadow); }
+.hero-mark { width: 60px; height: 60px; border-radius: 18px; background: var(--accent); display: grid; place-items: center; margin-bottom: 20px; box-shadow: var(--shadow); }
 .hero-mark svg { width: 30px; height: 30px; color: #eaf5ee; }
 .card h1 { font-family: var(--serif); font-weight: 600; font-size: 30px; line-height: 1.05; margin: 0 0 8px; letter-spacing: -.01em; }
 .card p.sub { color: var(--muted); font-size: 15px; margin: 0 0 22px; }
@@ -82,8 +82,9 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .ritem { display: flex; gap: 11px; align-items: center; padding: 10px; border-radius: 13px; border: 0; background: transparent; text-align: left; width: 100%; }
 .ritem:hover { background: var(--panel); }
 .ritem.active { background: var(--accent-soft); }
-.av { width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #fff; background: linear-gradient(150deg,#3c7d5d,#255c41); }
+.av { width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #fff; background: var(--accent); }
 .av.sm { width: 36px; height: 36px; font-size: 13px; }
+.av.lg { width: 56px; height: 56px; font-size: 19px; }
 .ri-main { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; }
 .ri-name { display: block; font-size: 14px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .ri-prev { display: block; font-size: 12.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
@@ -155,3 +156,47 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
   .back { display: grid; }
   .bubble { max-width: 82%; }
 }
+
+/* ---------- room switcher ---------- */
+.roomswitch { position: relative; }
+.roomswitch-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); color: var(--ink); border-radius: 999px; padding: 7px 12px; font-family: var(--sans); font-weight: 600; font-size: 13.5px; box-shadow: var(--shadow); cursor: pointer; }
+.roomswitch-btn svg { width: 14px; height: 14px; color: var(--muted); }
+.rdot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: none; display: inline-block; }
+.rs-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rs-scrim { position: fixed; inset: 0; z-index: 25; }
+.roommenu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 26; width: 264px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 8px; }
+.rm-head { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); padding: 6px 10px; }
+.rm-room { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 10px; padding: 9px 10px; color: var(--ink); font-size: 14px; font-weight: 600; cursor: pointer; }
+.rm-room:hover { background: var(--panel-2); }
+.rm-room.on { background: var(--accent-soft); color: var(--accent-ink); }
+.rm-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rm-meta { font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--faint); }
+.rm-div { height: 1px; background: var(--line); margin: 6px 4px; }
+.rm-act { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 10px; padding: 9px 10px; color: var(--accent-ink); font-weight: 600; font-size: 13px; cursor: pointer; font-family: var(--sans); }
+.rm-act:hover { background: var(--panel-2); }
+.rm-act:disabled { color: var(--faint); cursor: default; background: transparent; }
+.rm-act svg { width: 15px; height: 15px; }
+.rs-note { position: absolute; right: 0; top: calc(100% + 8px); z-index: 27; background: var(--accent-ink); color: #fff; font-size: 12.5px; padding: 8px 12px; border-radius: 10px; box-shadow: var(--shadow); max-width: 280px; }
+
+/* ---------- profile sheet ---------- */
+.sheet.profile { max-width: 440px; text-align: left; }
+.p-head { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+.p-name { font-family: var(--serif); font-weight: 600; font-size: 20px; display: flex; align-items: center; gap: 8px; }
+.p-user { font-family: var(--mono); font-size: 12px; color: var(--faint); margin-top: 1px; }
+.abadge { font-family: var(--mono); font-size: 9.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-ink); background: var(--accent-soft); padding: 2px 7px; border-radius: 999px; }
+.p-sect { display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin: 18px 0 8px; }
+.p-cnt { color: var(--accent-ink); }
+.p-room { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 7px; background: var(--panel-2); }
+.p-rname { font-weight: 600; font-size: 14px; }
+.p-rmeta { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+.fingerprint { font-family: var(--mono); font-size: 13px; letter-spacing: .06em; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; text-align: center; }
+.btn.danger-btn { background: transparent; color: var(--danger); border: 1px solid var(--line); margin-top: 16px; }
+.btn.danger-btn:hover { filter: none; background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.btn.danger-btn svg { width: 16px; height: 16px; }
+
+/* ---------- welcome: the 3D private-network backdrop ---------- */
+.auth-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(130% 120% at 72% 12%, var(--accent-soft), transparent 70%); }
+.auth-bg canvas { width: 100%; height: 100%; display: block; }
+/* lift the auth chrome above the backdrop, and frost the card so the net peeks through */
+.frame { position: relative; z-index: 1; }
+.center .card { background: color-mix(in srgb, var(--panel) 88%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }

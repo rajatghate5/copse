@@ -4,11 +4,11 @@
  * re-renders only when conversations or their latest message change.
  */
 
-import { useChatStore } from '../store/chatStore.ts';
-import { useAuth } from '../../auth/authStore.ts';
-import { conversationName, previewOf } from '../selectors.ts';
-import { initials, messageTime } from '../../../lib/format.ts';
-import { Plus } from '../../../lib/icons.tsx';
+import { useChatStore } from '@/features/chat/store/chatStore.ts';
+import { useAuth } from '@/features/auth/authStore.ts';
+import { conversationName, previewOf } from '@/features/chat/selectors.ts';
+import { initials, messageTime } from '@/lib/format.ts';
+import { Plus } from '@/assets/svgs/plus/index.tsx';
 
 interface Props {
   onSelect: (id: string) => void;

@@ -5,7 +5,7 @@
  */
 
 import type { ConversationSummary, UserSummary } from '@copse/protocol';
-import type { ChatMessage } from './store/chatStore.ts';
+import type { ChatMessage } from '@/features/chat/store/chatStore.ts';
 
 type Users = Record<string, UserSummary>;
 

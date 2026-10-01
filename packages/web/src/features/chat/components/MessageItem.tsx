@@ -5,9 +5,10 @@
  */
 
 import { memo } from 'react';
-import type { ChatMessage } from '../store/chatStore.ts';
-import { expiryLabel, messageTime } from '../../../lib/format.ts';
-import { Check, Clock } from '../../../lib/icons.tsx';
+import type { ChatMessage } from '@/features/chat/store/chatStore.ts';
+import { expiryLabel, messageTime } from '@/lib/format.ts';
+import { Check } from '@/assets/svgs/check/index.tsx';
+import { Clock } from '@/assets/svgs/clock/index.tsx';
 
 interface Props {
   message: ChatMessage;

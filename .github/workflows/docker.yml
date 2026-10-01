@@ -27,7 +27,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Start the container
-        run: docker run -d --name copse -p 4040:4040 -e COPSE_INVITE=ci-invite copse:ci
+        run: docker run -d --name copse -p 4040:4040 -e COPSE_BOOTSTRAP=ci-boot copse:ci
 
       - name: Wait for /health
         run: |
@@ -66,9 +66,10 @@ jobs:
         run: |
           reg=$(curl -s -X POST http://127.0.0.1:4040/api/register \
             -H "content-type: application/json" \
-            -d '{"invite":"ci-invite","username":"ci_user","displayName":"CI","keys":{"encPub":"QUJD","sigPub":"QUJD"},"vault":{"salt":"QUJD","iv":"QUJD","ciphertext":"QUJDRA=="}}')
+            -d '{"bootstrap":"ci-boot","roomName":"ci room","username":"ci_user","displayName":"CI","keys":{"encPub":"QUJD","sigPub":"QUJD"},"vault":{"salt":"QUJD","iv":"QUJD","ciphertext":"QUJDRA=="}}')
           echo "register -> $reg"
           echo "$reg" | grep -q '"userId"' || { echo "::error::register did not return a userId"; exit 1; }
+          echo "$reg" | grep -q '"roomId"' || { echo "::error::register did not return a roomId"; exit 1; }
           ch=$(curl -s -X POST http://127.0.0.1:4040/api/challenge \
             -H "content-type: application/json" -d '{"username":"ci_user"}')
           echo "challenge -> $ch"

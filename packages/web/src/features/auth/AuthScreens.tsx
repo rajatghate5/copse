@@ -5,9 +5,13 @@
  */
 
 import { useState } from 'react';
-import { useAuth } from './authStore.ts';
-import { Brand, ThemeToggle } from '../../components/common.tsx';
-import { Eye, EyeOff, Key, Lock } from '../../lib/icons.tsx';
+import { useAuth } from '@/features/auth/authStore.ts';
+import { Brand, ThemeToggle } from '@/components/common.tsx';
+import { Eye } from '@/assets/svgs/eye/index.tsx';
+import { EyeOff } from '@/assets/svgs/eye-off/index.tsx';
+import { Key } from '@/assets/svgs/key/index.tsx';
+import { Lock } from '@/assets/svgs/lock/index.tsx';
+import { PrivateNetwork } from '@/features/welcome/PrivateNetwork.tsx';
 
 /** A passphrase field with a show/hide toggle. Local state only. */
 function PassphraseField({ id, label, value, onChange, placeholder }: {
@@ -37,16 +41,19 @@ function PassphraseField({ id, label, value, onChange, placeholder }: {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="frame">
-      <div className="topbar">
-        <Brand />
-        <span className="spacer" />
-        <ThemeToggle />
+    <>
+      <PrivateNetwork />
+      <div className="frame">
+        <div className="topbar">
+          <Brand />
+          <span className="spacer" />
+          <ThemeToggle />
+        </div>
+        <div className="stage">
+          <div className="center">{children}</div>
+        </div>
       </div>
-      <div className="stage">
-        <div className="center">{children}</div>
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -75,8 +82,13 @@ function UnlockScreen() {
 function RegisterScreen({ toSignIn }: { toSignIn: () => void }) {
   const { register, busy, error, clearError } = useAuth();
   const [step, setStep] = useState<1 | 2>(1);
-  // An invite link (…/?invite=CODE) prefills the code so a friend just adds a name.
-  const [invite, setInvite] = useState(() => new URLSearchParams(location.search).get('invite') ?? '');
+  // Two ways in: an invite link (…/?join=CODE) into an existing room, or the
+  // operator's link (…/?bootstrap=TOKEN) that mints the very first room as admin.
+  const params = new URLSearchParams(location.search);
+  const [joinCode, setJoinCode] = useState(() => params.get('join') ?? '');
+  const bootstrapToken = params.get('bootstrap') ?? '';
+  const isBootstrap = bootstrapToken.length > 0;
+  const [roomName, setRoomName] = useState('');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [pass, setPass] = useState('');
@@ -84,7 +96,7 @@ function RegisterScreen({ toSignIn }: { toSignIn: () => void }) {
   const [local, setLocal] = useState<string | null>(null);
 
   const next = () => {
-    if (!invite.trim()) return setLocal('Enter your invite code.');
+    if (!isBootstrap && !joinCode.trim()) return setLocal('Enter your invite code.');
     if (username.trim().length < 3) return setLocal('Pick a username of at least 3 characters.');
     if (!displayName.trim()) return setLocal('Enter a display name.');
     setLocal(null);
@@ -95,7 +107,14 @@ function RegisterScreen({ toSignIn }: { toSignIn: () => void }) {
     if (pass.length < 8) return setLocal('Use a passphrase of at least 8 characters.');
     if (pass !== confirm) return setLocal("The passphrases don't match.");
     setLocal(null);
-    void register({ invite: invite.trim(), username: username.trim(), displayName: displayName.trim(), passphrase: pass });
+    void register({
+      joinCode: isBootstrap ? undefined : joinCode.trim(),
+      bootstrap: isBootstrap ? bootstrapToken : undefined,
+      roomName: isBootstrap ? roomName.trim() || undefined : undefined,
+      username: username.trim(),
+      displayName: displayName.trim(),
+      passphrase: pass,
+    });
   };
 
   if (step === 1) {
@@ -103,10 +122,21 @@ function RegisterScreen({ toSignIn }: { toSignIn: () => void }) {
       <Shell>
         <div className="card">
           <div className="hero-mark"><Lock /></div>
-          <h1>A private copse<br />for the few of you</h1>
-          <p className="sub">End-to-end encrypted. No phone number. Messages disappear after seven days. Enter an invite to begin.</p>
-          <label htmlFor="invite">Invite code</label>
-          <input id="invite" className="input" placeholder="copse-xxxx" value={invite} onChange={(e) => { setInvite(e.target.value); setLocal(null); }} />
+          {isBootstrap ? (
+            <>
+              <h1>Set up your Copse</h1>
+              <p className="sub">You're creating the first room as its admin. Name it, pick who you are, and you're in. Share an invite afterwards to bring the others.</p>
+              <label htmlFor="roomname">Room name</label>
+              <input id="roomname" className="input" placeholder="e.g. the four" value={roomName} onChange={(e) => { setRoomName(e.target.value); setLocal(null); }} />
+            </>
+          ) : (
+            <>
+              <h1>Join the room</h1>
+              <p className="sub">End-to-end encrypted. No phone number. Messages disappear after seven days. You'll need an invite to begin.</p>
+              <label htmlFor="join">Invite code</label>
+              <input id="join" className="input" placeholder="amber-pine-7f3a" value={joinCode} onChange={(e) => { setJoinCode(e.target.value); setLocal(null); }} />
+            </>
+          )}
           <label htmlFor="username">Username</label>
           <input id="username" className="input" placeholder="how friends find you" value={username} onChange={(e) => setUsername(e.target.value)} />
           <label htmlFor="display">Display name</label>
@@ -127,7 +157,7 @@ function RegisterScreen({ toSignIn }: { toSignIn: () => void }) {
         <PassphraseField id="p1" label="Passphrase" value={pass} placeholder="At least 8 characters" onChange={(v) => { setPass(v); clearError(); setLocal(null); }} />
         <PassphraseField id="p2" label="Confirm passphrase" value={confirm} placeholder="Type it again" onChange={(v) => { setConfirm(v); setLocal(null); }} />
         {(local || error) && <div className="pperr">{local ?? error}</div>}
-        <button className="btn" disabled={busy} onClick={create}>{busy ? 'Creating…' : <><Lock /> Create account</>}</button>
+        <button className="btn" disabled={busy} onClick={create}>{busy ? 'Creating…' : <><Lock /> {isBootstrap ? 'Create room & account' : 'Create account & join'}</>}</button>
         <button className="btn secondary" style={{ marginTop: 10 }} onClick={() => setStep(1)}>Back</button>
         <p className="note"><Key /><span>No phrase to write down. Forget the passphrase and messages can't be recovered — that's the trade for a server that can never read them.</span></p>
       </div>

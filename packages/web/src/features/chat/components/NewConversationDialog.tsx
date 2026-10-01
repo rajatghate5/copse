@@ -5,11 +5,11 @@
  */
 
 import { useState } from 'react';
-import { useChatStore } from '../store/chatStore.ts';
-import { useAuth } from '../../auth/authStore.ts';
-import { createConversation } from '../engine.ts';
-import { initials } from '../../../lib/format.ts';
-import { Check } from '../../../lib/icons.tsx';
+import { useChatStore } from '@/features/chat/store/chatStore.ts';
+import { useAuth } from '@/features/auth/authStore.ts';
+import { createConversation } from '@/features/chat/engine.ts';
+import { initials } from '@/lib/format.ts';
+import { Check } from '@/assets/svgs/check/index.tsx';
 
 export function NewConversationDialog({ onClose }: { onClose: () => void }) {
   const users = useChatStore((s) => s.users);

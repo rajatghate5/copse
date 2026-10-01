@@ -49,10 +49,12 @@ small trusted group that wants its own chat.
   passphrase; on a new device you enter your username and passphrase, and your
   sealed account is fetched and unlocked locally. You never redo the setup.
 
-The **invite code** is set by whoever runs the server (`COPSE_INVITE`) and is the
-gate that keeps the group closed. Share it as a code, or as an invite link
-(`https://your-copse/?invite=THECODE`) that pre-fills it — there's a button in the
-app to copy one.
+**Rooms.** Copse is organised into rooms — each a sealed-off space with its own
+people and conversations. You start one by bootstrapping (below); everyone else
+joins with an **invite link** (`https://your-copse/?join=CODE`) you share from
+inside the room. A member can be in up to 3 rooms (10 people each); the admin — the
+account that bootstrapped the server — can create as many rooms as they like.
+Invite codes are rotatable, so a leaked link is a one-click fix.
 
 ## Running it
 
@@ -68,8 +70,11 @@ bun run dev         # client on http://localhost:5173, proxying to the server
 To run the server the client talks to (a second terminal):
 
 ```bash
-COPSE_INVITE=copse-4evr bun run serve   # http://localhost:4040
+COPSE_BOOTSTRAP=some-secret bun run serve   # http://localhost:4040
 ```
+
+Then open `http://localhost:4040/?bootstrap=some-secret` once to create the first
+room and become its admin.
 
 ### Hosted (Render + Turso)
 
@@ -77,7 +82,8 @@ The server runs on Render's free tier. Because that tier has no persistent disk,
 message storage lives in [Turso](https://turso.tech) (hosted libSQL) — which is
 safe precisely because Copse only ever writes ciphertext. Create a database,
 set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` (see `render.yaml`), set
-`COPSE_INVITE`, and deploy the blueprint.
+`COPSE_BOOTSTRAP` to any secret, and deploy the blueprint. Then open
+`https://your-copse/?bootstrap=THAT_SECRET` once to mint the first room.
 
 > **The free server sleeps** after 15 minutes idle and takes about a minute to
 > wake. Copse shows a "waking up…" state rather than looking broken. Flip
@@ -89,7 +95,7 @@ No internet needed. One laptop runs the server against a local SQLite file;
 everyone else joins over the same Wi-Fi or hotspot.
 
 ```bash
-COPSE_INVITE=copse-4evr docker compose up -d      # http://<laptop-ip>:4040
+COPSE_BOOTSTRAP=some-secret docker compose up -d   # http://<laptop-ip>:4040
 ```
 
 Leave `TURSO_DATABASE_URL` unset and storage falls back to a local file

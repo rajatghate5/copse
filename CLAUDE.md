@@ -103,13 +103,25 @@ outgoing messages in IndexedDB when offline, and track delivery by per-sender
 ## Environment
 
 ```
-PORT=4040
-COPSE_INVITE=...            # required to allow registration; mismatch → 403
-COPSE_STATIC=...            # dir of the built client, served by the same process
-COPSE_DB=./copse.db         # local SQLite path (offline mode)
+PORT=4040                   # the platform sets this; unset falls back to 4040
+COPSE_BOOTSTRAP=...         # operator secret. Open /?bootstrap=THAT once to mint
+                            #   the first room and become admin. Unset ⇒ no first
+                            #   room can be created (the server stays closed).
+COPSE_STATIC=...            # dir of the built client (baked into the image)
+COPSE_DB=./copse.db         # local SQLite path (offline mode); defaulted
 TURSO_DATABASE_URL=...      # set → hosted mode (ciphertext only lives here)
 TURSO_AUTH_TOKEN=...
 ```
+
+## Rooms
+
+A room is a sealed-off space with its own directory and conversations; a socket is
+scoped to one room (`/ws?room=ID`, reopened to switch). Caps live in
+`@copse/protocol`: a member may be in `MAX_ROOMS_PER_USER` (3) rooms, each holds
+`ROOM_MAX_MEMBERS` (10). The **admin** (the `COPSE_BOOTSTRAP` account, `is_admin`)
+may create unlimited rooms. Invite codes are rotatable (`rooms.ts` mints them);
+registration lands an account in a room by `joinCode` or `bootstrap`. Conversations
+carry a `room_id` and never cross rooms.
 
 ## Conventions
 

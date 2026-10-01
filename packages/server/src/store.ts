@@ -18,6 +18,7 @@ import type {
   ConversationKind,
   ConversationSummary,
   MemberKey,
+  RoomSummary,
   UserSummary,
   VaultBlob,
   WireMessage,
@@ -44,10 +45,25 @@ CREATE TABLE IF NOT EXISTS users (
   vault_salt    TEXT NOT NULL,
   vault_iv      TEXT NOT NULL,
   vault_ct      TEXT NOT NULL,
+  is_admin      INTEGER NOT NULL DEFAULT 0,
   created_at    INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS rooms (
+  id            TEXT PRIMARY KEY,
+  name          TEXT NOT NULL,
+  invite_code   TEXT NOT NULL UNIQUE,
+  created_by    TEXT NOT NULL,
+  created_at    INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS room_members (
+  room_id    TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  joined_at  INTEGER NOT NULL,
+  PRIMARY KEY (room_id, user_id)
 );
 CREATE TABLE IF NOT EXISTS conversations (
   id                TEXT PRIMARY KEY,
+  room_id           TEXT NOT NULL,
   kind              TEXT NOT NULL,
   title_ciphertext  TEXT,
   created_by        TEXT NOT NULL,
@@ -70,6 +86,8 @@ CREATE TABLE IF NOT EXISTS messages (
   signature        TEXT NOT NULL,
   sent_at          INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_room_members_user ON room_members (user_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_room ON conversations (room_id);
 CREATE INDEX IF NOT EXISTS idx_members_user ON members (user_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages (conversation_id, sent_at);
 `;
@@ -80,9 +98,18 @@ export interface NewUser {
   encPub: string;
   sigPub: string;
   vault: VaultBlob;
+  /** The bootstrap account is admin; everyone else is a plain member. */
+  isAdmin?: boolean;
+}
+
+export interface NewRoom {
+  name: string;
+  inviteCode: string;
+  createdBy: string;
 }
 
 export interface NewConversation {
+  roomId: string;
   kind: ConversationKind;
   titleCiphertext: string | null;
   createdBy: string;
@@ -106,11 +133,28 @@ export interface Store {
   getUserByUsername(username: string): Promise<UserSummary | null>;
   /** The sealed passphrase vault for a username, for unlocking on a new device. */
   getVault(username: string): Promise<VaultBlob | null>;
-  listUsers(): Promise<UserSummary[]>;
+  /** Everyone in a room - the directory a member may wrap keys to. */
+  listUsersInRoom(roomId: string): Promise<UserSummary[]>;
+
+  // --- rooms ---------------------------------------------------------------
+  createRoom(r: NewRoom): Promise<RoomSummary>;
+  getRoom(id: string): Promise<RoomSummary | null>;
+  getRoomByCode(inviteCode: string): Promise<RoomSummary | null>;
+  /** Every room the user belongs to, for the room switcher. */
+  listRoomsForUser(userId: string): Promise<RoomSummary[]>;
+  /** How many members a room has, to enforce the per-room cap. */
+  roomMemberCount(roomId: string): Promise<number>;
+  /** How many rooms a user belongs to, to enforce the per-user cap. */
+  userRoomCount(userId: string): Promise<number>;
+  isRoomMember(roomId: string, userId: string): Promise<boolean>;
+  addRoomMember(roomId: string, userId: string): Promise<void>;
+  /** Replace a room's invite code (rotation after a leak). */
+  setRoomInviteCode(roomId: string, inviteCode: string): Promise<void>;
 
   createConversation(c: NewConversation): Promise<ConversationSummary>;
   getConversation(id: string): Promise<ConversationSummary | null>;
-  listConversationsForUser(userId: string): Promise<ConversationSummary[]>;
+  /** The user's conversations within one room; conversations never cross rooms. */
+  listConversationsForUser(userId: string, roomId: string): Promise<ConversationSummary[]>;
 
   isMember(conversationId: string, userId: string): Promise<boolean>;
   memberIds(conversationId: string): Promise<string[]>;
@@ -138,6 +182,7 @@ interface UserRow {
   display_name: string;
   enc_pub: string;
   sig_pub: string;
+  is_admin: number | boolean;
 }
 
 export function rowToUser(r: UserRow): UserSummary {
@@ -146,6 +191,26 @@ export function rowToUser(r: UserRow): UserSummary {
     username: r.username,
     displayName: r.display_name,
     keys: { encPub: r.enc_pub, sigPub: r.sig_pub },
+    isAdmin: Boolean(Number(r.is_admin)),
+  };
+}
+
+interface RoomRow {
+  id: string;
+  name: string;
+  invite_code: string;
+  created_by: string;
+  created_at: number;
+}
+
+export function rowToRoom(r: RoomRow, memberCount: number): RoomSummary {
+  return {
+    id: r.id,
+    name: r.name,
+    inviteCode: r.invite_code,
+    memberCount,
+    createdBy: r.created_by,
+    createdAt: Number(r.created_at),
   };
 }
 

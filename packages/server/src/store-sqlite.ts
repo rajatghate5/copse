@@ -11,6 +11,7 @@
 import { Database } from 'bun:sqlite';
 import type {
   ConversationSummary,
+  RoomSummary,
   UserSummary,
   VaultBlob,
   WireMessage,
@@ -21,9 +22,11 @@ import {
   SCHEMA,
   newId,
   rowToMessage,
+  rowToRoom,
   rowToUser,
   type NewConversation,
   type NewMessage,
+  type NewRoom,
   type NewUser,
   type Store,
 } from './store.ts';
@@ -43,16 +46,18 @@ export class SqliteStore implements Store {
 
   async createUser(u: NewUser): Promise<UserSummary> {
     const id = newId();
+    const isAdmin = u.isAdmin ? 1 : 0;
     this.db
       .query(
-        'INSERT INTO users (id, username, display_name, enc_pub, sig_pub, vault_salt, vault_iv, vault_ct, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO users (id, username, display_name, enc_pub, sig_pub, vault_salt, vault_iv, vault_ct, is_admin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(id, u.username, u.displayName, u.encPub, u.sigPub, u.vault.salt, u.vault.iv, u.vault.ciphertext, Date.now());
+      .run(id, u.username, u.displayName, u.encPub, u.sigPub, u.vault.salt, u.vault.iv, u.vault.ciphertext, isAdmin, Date.now());
     return {
       id,
       username: u.username,
       displayName: u.displayName,
       keys: { encPub: u.encPub, sigPub: u.sigPub },
+      isAdmin: Boolean(isAdmin),
     };
   }
 
@@ -73,16 +78,92 @@ export class SqliteStore implements Store {
     return row ? { salt: row.vault_salt, iv: row.vault_iv, ciphertext: row.vault_ct } : null;
   }
 
-  async listUsers(): Promise<UserSummary[]> {
-    const rows = this.db.query('SELECT * FROM users ORDER BY created_at').all() as any[];
+  async listUsersInRoom(roomId: string): Promise<UserSummary[]> {
+    const rows = this.db
+      .query(
+        `SELECT u.* FROM users u
+         JOIN room_members rm ON rm.user_id = u.id
+         WHERE rm.room_id = ? ORDER BY u.created_at`,
+      )
+      .all(roomId) as any[];
     return rows.map(rowToUser);
+  }
+
+  // --- rooms ---------------------------------------------------------------
+
+  async createRoom(r: NewRoom): Promise<RoomSummary> {
+    const id = newId();
+    const now = Date.now();
+    this.db.transaction(() => {
+      this.db
+        .query('INSERT INTO rooms (id, name, invite_code, created_by, created_at) VALUES (?, ?, ?, ?, ?)')
+        .run(id, r.name, r.inviteCode, r.createdBy, now);
+      this.db
+        .query('INSERT INTO room_members (room_id, user_id, joined_at) VALUES (?, ?, ?)')
+        .run(id, r.createdBy, now);
+    })();
+    return { id, name: r.name, inviteCode: r.inviteCode, memberCount: 1, createdBy: r.createdBy, createdAt: now };
+  }
+
+  async getRoom(id: string): Promise<RoomSummary | null> {
+    const row = this.db.query('SELECT * FROM rooms WHERE id = ?').get(id) as any;
+    return row ? rowToRoom(row, await this.roomMemberCount(id)) : null;
+  }
+
+  async getRoomByCode(inviteCode: string): Promise<RoomSummary | null> {
+    const row = this.db.query('SELECT * FROM rooms WHERE invite_code = ?').get(inviteCode) as any;
+    return row ? rowToRoom(row, await this.roomMemberCount(row.id)) : null;
+  }
+
+  async listRoomsForUser(userId: string): Promise<RoomSummary[]> {
+    const rows = this.db
+      .query(
+        `SELECT r.* FROM rooms r
+         JOIN room_members rm ON rm.room_id = r.id
+         WHERE rm.user_id = ? ORDER BY r.created_at`,
+      )
+      .all(userId) as any[];
+    const out: RoomSummary[] = [];
+    for (const row of rows) out.push(rowToRoom(row, await this.roomMemberCount(row.id)));
+    return out;
+  }
+
+  async roomMemberCount(roomId: string): Promise<number> {
+    const row = this.db
+      .query('SELECT COUNT(*) AS n FROM room_members WHERE room_id = ?')
+      .get(roomId) as any;
+    return Number(row?.n ?? 0);
+  }
+
+  async userRoomCount(userId: string): Promise<number> {
+    const row = this.db
+      .query('SELECT COUNT(*) AS n FROM room_members WHERE user_id = ?')
+      .get(userId) as any;
+    return Number(row?.n ?? 0);
+  }
+
+  async isRoomMember(roomId: string, userId: string): Promise<boolean> {
+    const row = this.db
+      .query('SELECT 1 FROM room_members WHERE room_id = ? AND user_id = ?')
+      .get(roomId, userId);
+    return row !== null;
+  }
+
+  async addRoomMember(roomId: string, userId: string): Promise<void> {
+    this.db
+      .query('INSERT OR IGNORE INTO room_members (room_id, user_id, joined_at) VALUES (?, ?, ?)')
+      .run(roomId, userId, Date.now());
+  }
+
+  async setRoomInviteCode(roomId: string, inviteCode: string): Promise<void> {
+    this.db.query('UPDATE rooms SET invite_code = ? WHERE id = ?').run(inviteCode, roomId);
   }
 
   async createConversation(c: NewConversation): Promise<ConversationSummary> {
     const id = newId();
     const now = Date.now();
     const insertConv = this.db.query(
-      'INSERT INTO conversations (id, kind, title_ciphertext, created_by, created_at) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO conversations (id, room_id, kind, title_ciphertext, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)',
     );
     const insertMember = this.db.query(
       'INSERT INTO members (conversation_id, user_id, wrapped_key, joined_at) VALUES (?, ?, ?, ?)',
@@ -90,11 +171,12 @@ export class SqliteStore implements Store {
     // One transaction: a conversation with no members, or members with no
     // conversation, is never observable.
     this.db.transaction(() => {
-      insertConv.run(id, c.kind, c.titleCiphertext, c.createdBy, now);
+      insertConv.run(id, c.roomId, c.kind, c.titleCiphertext, c.createdBy, now);
       for (const m of c.members) insertMember.run(id, m.userId, m.wrappedKey, now);
     })();
     return {
       id,
+      roomId: c.roomId,
       kind: c.kind,
       titleCiphertext: c.titleCiphertext,
       memberIds: c.members.map((m) => m.userId),
@@ -111,6 +193,7 @@ export class SqliteStore implements Store {
     ).map((r) => r.user_id as string);
     return {
       id: conv.id,
+      roomId: conv.room_id,
       kind: conv.kind,
       titleCiphertext: conv.title_ciphertext,
       memberIds,
@@ -123,9 +206,15 @@ export class SqliteStore implements Store {
     return this.assembleConversation(id);
   }
 
-  async listConversationsForUser(userId: string): Promise<ConversationSummary[]> {
+  async listConversationsForUser(userId: string, roomId: string): Promise<ConversationSummary[]> {
     const ids = (
-      this.db.query('SELECT conversation_id FROM members WHERE user_id = ?').all(userId) as any[]
+      this.db
+        .query(
+          `SELECT m.conversation_id FROM members m
+           JOIN conversations c ON c.id = m.conversation_id
+           WHERE m.user_id = ? AND c.room_id = ?`,
+        )
+        .all(userId, roomId) as any[]
     ).map((r) => r.conversation_id as string);
     const out: ConversationSummary[] = [];
     for (const id of ids) {

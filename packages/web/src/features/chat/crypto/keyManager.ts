@@ -23,7 +23,7 @@ import {
   type PublicIdentity,
 } from '@copse/crypto';
 import { packWrappedKey, unpackWrappedKey, type MemberKey, type PublicKeys } from '@copse/protocol';
-import { loadConvKeys, saveConvKey } from '../../../lib/idb.ts';
+import { loadConvKeys, saveConvKey } from '@/lib/idb.ts';
 
 export class KeyManager {
   private convKeys = new Map<string, Uint8Array>();
