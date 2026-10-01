@@ -11,7 +11,7 @@ import { Eye } from '@/assets/svgs/eye/index.tsx';
 import { EyeOff } from '@/assets/svgs/eye-off/index.tsx';
 import { Key } from '@/assets/svgs/key/index.tsx';
 import { Lock } from '@/assets/svgs/lock/index.tsx';
-import { PrivateNetwork } from '@/features/welcome/PrivateNetwork.tsx';
+import { Huddle } from '@/features/welcome/Huddle.tsx';
 
 /** A passphrase field with a show/hide toggle. Local state only. */
 function PassphraseField({ id, label, value, onChange, placeholder }: {
@@ -42,7 +42,7 @@ function PassphraseField({ id, label, value, onChange, placeholder }: {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <PrivateNetwork />
+      <Huddle />
       <div className="frame">
         <div className="topbar">
           <Brand />

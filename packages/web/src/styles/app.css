@@ -194,9 +194,19 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .btn.danger-btn:hover { filter: none; background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .btn.danger-btn svg { width: 16px; height: 16px; }
 
-/* ---------- welcome: the 3D private-network backdrop ---------- */
-.auth-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(130% 120% at 72% 12%, var(--accent-soft), transparent 70%); }
-.auth-bg canvas { width: 100%; height: 100%; display: block; }
-/* lift the auth chrome above the backdrop, and frost the card so the net peeks through */
+/* ---------- welcome: the "copse of chat" bubble huddle backdrop ---------- */
+.auth-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; display: grid; place-items: center; background: radial-gradient(130% 120% at 72% 12%, var(--accent-soft), transparent 70%); }
+.huddle { position: relative; width: 168px; height: 170px; opacity: 0.92; transform: scale(1.5); }
+.bub { position: absolute; border-radius: 15px; background: var(--c); box-shadow: 0 4px 14px rgba(20, 50, 30, 0.14); animation: huddle-breathe 4s ease-in-out infinite; }
+.bub::after { content: ""; position: absolute; bottom: -5px; left: 13px; border: 6px solid transparent; border-top-color: var(--c); border-right-width: 0; }
+.bub.r::after { left: auto; right: 13px; border-right-width: 6px; border-left-width: 0; }
+.bub .dots { display: flex; gap: 4px; align-items: center; justify-content: center; height: 100%; }
+.bub .dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.85); animation: huddle-typing 1.2s infinite; }
+.bub .dots i:nth-child(2) { animation-delay: 0.16s; }
+.bub .dots i:nth-child(3) { animation-delay: 0.32s; }
+@keyframes huddle-breathe { 0%, 100% { transform: scale(1) translateY(0); } 50% { transform: scale(1.06) translateY(-4px); } }
+@keyframes huddle-typing { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 30% { transform: translateY(-4px); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .bub, .bub .dots i { animation: none !important; } }
+/* lift the auth chrome above the backdrop, and frost the card so the huddle peeks through */
 .frame { position: relative; z-index: 1; }
 .center .card { background: color-mix(in srgb, var(--panel) 88%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
