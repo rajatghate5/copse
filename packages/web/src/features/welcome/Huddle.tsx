@@ -1,58 +1,65 @@
 /**
- * The welcome backdrop: a copse of chat. A small cluster of message bubbles that
- * breathe together — the name (a copse: a little huddle) and the product (chat) in
- * one idea. Pure CSS/DOM, no WebGL; the gradient behind it carries the rest, and
- * the breathing pauses under prefers-reduced-motion (handled in the stylesheet).
+ * The welcome backdrop: a copse of chat. Message bubbles scattered in the space
+ * around the sign-in card, each drifting gently on its own rhythm — the name (a
+ * copse: a small gathering) and the product (chat) in one idea. Pure CSS/DOM, no
+ * WebGL. Positions are viewport-relative and kept out of the card's centre column
+ * so the bubbles stay visible; motion pauses under prefers-reduced-motion (handled
+ * in the stylesheet).
  */
 
 import type { CSSProperties } from 'react';
 
 interface Bubble {
-  left: number;
-  top: number;
+  left: string;
+  top: string;
   w: number;
   h: number;
   color: string;
   right?: boolean;
   dots?: boolean;
+  /** seconds for one float cycle, and how far (px) it drifts */
+  dur: number;
+  rise: number;
 }
 
-// A deliberate, hand-placed cluster — not a grid. Coordinates are within the
-// .huddle box (see app.css); the staggered delay makes them breathe out of sync.
+// Hand-placed around the card, favouring the empty gutters and the band above and
+// below it, so nothing hides behind the sign-in form at any width.
 const BUBBLES: Bubble[] = [
-  { left: 0, top: 10, w: 86, h: 34, color: '#dcebe0' },
-  { left: 80, top: 50, w: 70, h: 30, color: 'var(--accent)', right: true },
-  { left: 26, top: 90, w: 96, h: 36, color: '#8fbf9e' },
-  { left: 110, top: 0, w: 58, h: 28, color: '#e6c98a', right: true },
-  { left: 50, top: 136, w: 54, h: 30, color: 'var(--accent)', dots: true },
+  { left: '12%', top: '16%', w: 92, h: 38, color: '#dcebe0', dur: 6, rise: 14 },
+  { left: '78%', top: '12%', w: 66, h: 32, color: 'var(--accent)', right: true, dur: 7.5, rise: 18 },
+  { left: '6%', top: '52%', w: 78, h: 34, color: '#8fbf9e', dur: 6.8, rise: 12 },
+  { left: '82%', top: '46%', w: 84, h: 36, color: '#e6c98a', right: true, dur: 8, rise: 16 },
+  { left: '18%', top: '78%', w: 70, h: 34, color: 'var(--accent)', dots: true, dur: 5.5, rise: 14 },
+  { left: '74%', top: '80%', w: 60, h: 30, color: '#8fbf9e', right: true, dur: 7, rise: 20 },
+  { left: '46%', top: '7%', w: 74, h: 34, color: 'var(--accent)', dur: 6.2, rise: 16 },
 ];
 
 export function Huddle() {
   return (
     <div className="auth-bg" aria-hidden="true">
-      <div className="huddle">
-        {BUBBLES.map((b, i) => {
-          const style = {
-            left: b.left,
-            top: b.top,
-            width: b.w,
-            height: b.h,
-            '--c': b.color,
-            animationDelay: `${i * 0.35}s`,
-          } as CSSProperties;
-          return (
-            <div key={i} className={`bub${b.right ? ' r' : ''}`} style={style}>
-              {b.dots && (
-                <div className="dots">
-                  <i />
-                  <i />
-                  <i />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {BUBBLES.map((b, i) => {
+        const style = {
+          left: b.left,
+          top: b.top,
+          width: b.w,
+          height: b.h,
+          '--c': b.color,
+          '--rise': `${b.rise}px`,
+          animationDuration: `${b.dur}s`,
+          animationDelay: `${i * -1.3}s`,
+        } as CSSProperties;
+        return (
+          <div key={i} className={`bub${b.right ? ' r' : ''}`} style={style}>
+            {b.dots && (
+              <div className="dots">
+                <i />
+                <i />
+                <i />
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
