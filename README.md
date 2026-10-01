@@ -18,6 +18,14 @@ the WebSocket API and the web client from one URL, deployed as one Docker image.
 > first person to open it after a quiet spell waits ~50s for it to wake;
 > everyone after that is immediate.
 
+> **First run — operator only, once.** After the server is live, open
+> **`https://copse.onrender.com/?bootstrap=YOUR_SECRET`** (replace `YOUR_SECRET`
+> with the exact value of the `COPSE_BOOTSTRAP` env var you set in Render). That
+> one link creates the first room and makes you the **admin**. You only need it
+> once — afterwards you sign in with your passphrase, and you create more rooms
+> and share invite links from inside the app. Keep the secret private; anyone
+> with it can mint a room.
+
 ## What "end-to-end encrypted" means here, honestly
 
 - **The server cannot read your messages.** Every message is encrypted in the
