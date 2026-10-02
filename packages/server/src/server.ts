@@ -356,6 +356,51 @@ export function createServer(opts: ServerOptions): CopseServer {
         return;
       }
 
+      case 'addMembers': {
+        // You can only add to a conversation you are in, and only within the
+        // room this socket is scoped to - the same two gates every other
+        // conversation action passes.
+        if (!(await store.isMember(msg.conversationId, me))) {
+          return send(ws, { t: 'error', code: 'not_a_member', message: 'not a member' });
+        }
+        const conv = await store.getConversation(msg.conversationId);
+        if (!conv || conv.roomId !== room) {
+          return send(ws, { t: 'error', code: 'no_such_conversation', message: 'no such conversation' });
+        }
+        if (!Array.isArray(msg.members) || msg.members.length === 0 || msg.members.length > MAX_MEMBERS) {
+          return send(ws, { t: 'error', code: 'bad_message', message: 'bad member list' });
+        }
+        const already = new Set(conv.memberIds);
+        const adding = new Set<string>();
+        for (const m of msg.members) {
+          if (typeof m.userId !== 'string' || adding.has(m.userId) || already.has(m.userId)) {
+            return send(ws, { t: 'error', code: 'bad_message', message: 'bad member' });
+          }
+          adding.add(m.userId);
+          if (!cleanB64(m.wrappedKey, MAX_WRAPPED_KEY_LENGTH)) {
+            return send(ws, { t: 'error', code: 'bad_message', message: 'bad wrapped key' });
+          }
+          if (!(await store.isRoomMember(room, m.userId))) {
+            return send(ws, { t: 'error', code: 'not_a_room_member', message: 'member not in room' });
+          }
+        }
+        if (already.size + adding.size > MAX_MEMBERS) {
+          return send(ws, { t: 'error', code: 'bad_message', message: 'conversation is full' });
+        }
+        const updated = await store.addMembers(msg.conversationId, msg.members);
+        if (!updated) {
+          return send(ws, { t: 'error', code: 'no_such_conversation', message: 'no such conversation' });
+        }
+        // Everyone learns the new membership; only the new members get a key,
+        // and only their own. Theirs goes second, so by the time a client can
+        // decrypt the thread it already knows who is in it.
+        hub.sendMany(updated.memberIds, room, { t: 'conversation', conversation: updated });
+        for (const m of msg.members) {
+          hub.send(m.userId, room, { t: 'key', conversationId: updated.id, wrappedKey: m.wrappedKey });
+        }
+        return;
+      }
+
       case 'send': {
         if (!(await store.isMember(msg.conversationId, me))) {
           return send(ws, { t: 'error', code: 'not_a_member', message: 'not a member' });

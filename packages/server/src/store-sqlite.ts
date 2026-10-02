@@ -11,14 +11,17 @@
 import { Database } from 'bun:sqlite';
 import type {
   ConversationSummary,
+  MemberKey,
   RoomSummary,
   UserSummary,
   VaultBlob,
   WireMessage,
 } from '@copse/protocol';
 import {
+  ADD_MEMBER_SQL,
   HISTORY_PAGE,
   MIGRATIONS,
+  PROMOTE_TO_GROUP_SQL,
   RETENTION_MS,
   SCHEMA,
   newId,
@@ -191,6 +194,19 @@ export class SqliteStore implements Store {
       createdBy: c.createdBy,
       createdAt: now,
     };
+  }
+
+  async addMembers(conversationId: string, members: MemberKey[]): Promise<ConversationSummary | null> {
+    const now = Date.now();
+    const insert = this.db.query(ADD_MEMBER_SQL);
+    const promote = this.db.query(PROMOTE_TO_GROUP_SQL);
+    // One transaction: nobody can observe the new membership without the
+    // promotion that follows from it.
+    this.db.transaction(() => {
+      for (const m of members) insert.run(conversationId, m.userId, m.wrappedKey, now);
+      promote.run(conversationId);
+    })();
+    return this.assembleConversation(conversationId);
   }
 
   private async assembleConversation(id: string): Promise<ConversationSummary | null> {

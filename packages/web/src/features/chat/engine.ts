@@ -234,6 +234,28 @@ export async function createConversation(kind: ConversationKind, otherUserIds: s
   // Our own wrapped key comes back as a 'key' frame and unwraps to the same key.
 }
 
+/**
+ * Add people to a conversation we are already in. The key is wrapped here, on
+ * this device, because it exists nowhere else - and it is the same key, so they
+ * will be able to read the thread as it already stands.
+ */
+export async function addMembers(conversationId: string, newUserIds: string[]): Promise<void> {
+  const { km, me } = useAuth.getState();
+  const users = useChatStore.getState().users;
+  const conv = useChatStore.getState().conversations[conversationId];
+  if (!km || !me || !conv) return;
+
+  const already = new Set(conv.memberIds);
+  const members = newUserIds
+    .filter((id) => !already.has(id) && users[id])
+    .map((id) => ({ userId: id, encPub: users[id]!.keys.encPub }));
+  if (members.length === 0) return;
+
+  const wrapped = await km.wrapExistingKeyFor(conversationId, members);
+  if (!wrapped) return; // no key for this conversation yet; nothing to hand over
+  socket.send({ t: 'addMembers', conversationId, members: wrapped });
+}
+
 /** On (re)connect, resend anything queued while offline. */
 async function flushOutbox(): Promise<void> {
   const items = await pending();

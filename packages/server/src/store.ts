@@ -177,6 +177,14 @@ export interface Store {
   /** The user's conversations within one room; conversations never cross rooms. */
   listConversationsForUser(userId: string, roomId: string): Promise<ConversationSummary[]>;
 
+  /**
+   * Add members to an existing conversation and return it as it now stands, or
+   * null if there is no such conversation. Adding someone already in it is a
+   * no-op: their original wrapped key and join time stand, so a double tap
+   * cannot re-key anyone or move when they joined.
+   */
+  addMembers(conversationId: string, members: MemberKey[]): Promise<ConversationSummary | null>;
+
   isMember(conversationId: string, userId: string): Promise<boolean>;
   memberIds(conversationId: string): Promise<string[]>;
   /** The conversation key wrapped for one member, or null if not a member. */
@@ -272,6 +280,20 @@ export function rowToMessage(r: MessageRow): WireMessage {
     readAt: r.read_at ?? null,
   };
 }
+
+/** `OR IGNORE` is what makes re-adding an existing member a no-op. */
+export const ADD_MEMBER_SQL =
+  'INSERT OR IGNORE INTO members (conversation_id, user_id, wrapped_key, joined_at) VALUES (?, ?, ?, ?)';
+
+/**
+ * A conversation with more than two people in it is a group, whatever it was
+ * created as - so growing a direct chat promotes it rather than leaving a row
+ * that claims to be a pair. Counted in SQL, in the same transaction as the
+ * insert, so it cannot disagree with the membership it is derived from.
+ */
+export const PROMOTE_TO_GROUP_SQL =
+  "UPDATE conversations SET kind = 'group' WHERE id = ?" +
+  ' AND (SELECT COUNT(*) FROM members WHERE conversation_id = conversations.id) > 2';
 
 /**
  * `SET x = COALESCE(x, ?)` is what makes both marks first-wins, and the IN list

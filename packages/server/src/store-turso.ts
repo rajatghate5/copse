@@ -13,14 +13,17 @@
 import { createClient, type Client } from '@libsql/client';
 import type {
   ConversationSummary,
+  MemberKey,
   RoomSummary,
   UserSummary,
   VaultBlob,
   WireMessage,
 } from '@copse/protocol';
 import {
+  ADD_MEMBER_SQL,
   HISTORY_PAGE,
   MIGRATIONS,
+  PROMOTE_TO_GROUP_SQL,
   RETENTION_MS,
   SCHEMA,
   newId,
@@ -198,6 +201,23 @@ export class TursoStore implements Store {
       createdBy: c.createdBy,
       createdAt: now,
     };
+  }
+
+  async addMembers(conversationId: string, members: MemberKey[]): Promise<ConversationSummary | null> {
+    const now = Date.now();
+    // One write batch, for the same reason the sqlite backend uses one
+    // transaction: the membership and the kind it implies commit together.
+    await this.db.batch(
+      [
+        ...members.map((m) => ({
+          sql: ADD_MEMBER_SQL,
+          args: [conversationId, m.userId, m.wrappedKey, now],
+        })),
+        { sql: PROMOTE_TO_GROUP_SQL, args: [conversationId] },
+      ],
+      'write',
+    );
+    return this.assembleConversation(conversationId);
   }
 
   private async assembleConversation(id: string): Promise<ConversationSummary | null> {

@@ -47,17 +47,41 @@ export class KeyManager {
     await saveConvKey(conversationId, bytesToBase64(key));
   }
 
-  /** A brand-new conversation key, wrapped once per member for `createConversation`. */
-  async newConversationKeys(
-    members: { userId: string; encPub: string }[],
-  ): Promise<{ key: Uint8Array; wrapped: MemberKey[] }> {
-    const key = generateConversationKey();
+  /** Seal one conversation key to each member's X25519 public key. */
+  private async wrapFor(key: Uint8Array, members: { userId: string; encPub: string }[]): Promise<MemberKey[]> {
     const wrapped: MemberKey[] = [];
     for (const m of members) {
       const w = await wrapKeyFor(key, base64ToBytes(m.encPub));
       wrapped.push({ userId: m.userId, wrappedKey: packWrappedKey(w) });
     }
-    return { key, wrapped };
+    return wrapped;
+  }
+
+  /** A brand-new conversation key, wrapped once per member for `createConversation`. */
+  async newConversationKeys(
+    members: { userId: string; encPub: string }[],
+  ): Promise<{ key: Uint8Array; wrapped: MemberKey[] }> {
+    const key = generateConversationKey();
+    return { key, wrapped: await this.wrapFor(key, members) };
+  }
+
+  /**
+   * Wrap the key of a conversation we are in for people being added to it.
+   * Null when we hold no key for it, which is the only honest answer: the
+   * server has never had the key and cannot wrap it for anyone.
+   *
+   * There is one key per conversation and no re-keying, so whoever is handed it
+   * can read the entire thread, including what was said before they arrived.
+   * That cannot be hidden here - it follows from a shared key with no forward
+   * secrecy - so the UI says it out loud before anyone is added.
+   */
+  async wrapExistingKeyFor(
+    conversationId: string,
+    members: { userId: string; encPub: string }[],
+  ): Promise<MemberKey[] | null> {
+    const key = this.convKeys.get(conversationId);
+    if (!key) return null;
+    return this.wrapFor(key, members);
   }
 
   async storeNewKey(conversationId: string, key: Uint8Array): Promise<void> {

@@ -437,6 +437,151 @@ function runSuite(name: string, makeStore: () => Store) {
       b2.ws.close();
     });
 
+    test('a third person added to a conversation gets the key, the history and a group', async () => {
+      const h = await startServer(makeStore());
+      servers.push(h.server);
+
+      const alice = identityFromMnemonic(generateMnemonicPhrase());
+      const bob = identityFromMnemonic(generateMnemonicPhrase());
+      const cara = identityFromMnemonic(generateMnemonicPhrase());
+      const { userId: aliceId, roomId } = await bootstrapRoom(h.base, 'alice', alice);
+      const aliceCookie = await login(h.base, 'alice', alice);
+      const code = await firstRoomCode(h.base, aliceCookie);
+      const { userId: bobId } = await joinRoom(h.base, 'bob', bob, code);
+      const { userId: caraId } = await joinRoom(h.base, 'cara', cara, code);
+      const bobCookie = await login(h.base, 'bob', bob);
+      const caraCookie = await login(h.base, 'cara', cara);
+
+      const a = openSocket(h.base, aliceCookie, roomId);
+      const b = openSocket(h.base, bobCookie, roomId);
+      const c = openSocket(h.base, caraCookie, roomId);
+      const aReady = (await waitFor(() => a.frames.find((f) => f.t === 'ready'))) as Extract<ServerMessage, { t: 'ready' }>;
+      await waitFor(() => b.frames.find((f) => f.t === 'ready'));
+      await waitFor(() => c.frames.find((f) => f.t === 'ready'));
+      const bobSummary = aReady.users.find((u: UserSummary) => u.id === bobId)!;
+      const caraSummary = aReady.users.find((u: UserSummary) => u.id === caraId)!;
+
+      // Alice and Bob, alone, in a direct chat.
+      const convKey = generateConversationKey();
+      a.ws.send(JSON.stringify({
+        t: 'createConversation', kind: 'direct', titleCiphertext: null,
+        members: [
+          { userId: aliceId, wrappedKey: packWrappedKey(await wrapKeyFor(convKey, alice.encPub)) },
+          { userId: bobId, wrappedKey: packWrappedKey(await wrapKeyFor(convKey, base64ToBytes(bobSummary.keys.encPub))) },
+        ],
+      }));
+      const made = (await waitFor(() => b.frames.find((f) => f.t === 'conversation'))) as Extract<ServerMessage, { t: 'conversation' }>;
+      const conversationId = made.conversation.id;
+      expect(made.conversation.kind).toBe('direct');
+
+      // Something said before Cara is anywhere near it.
+      const sealed = await sealMessage(convKey, alice.sigPriv, { conversationId, senderId: aliceId, seq: 1 }, utf8ToBytes('said before cara'));
+      a.ws.send(JSON.stringify({
+        t: 'send', conversationId, seq: 1,
+        iv: bytesToBase64(sealed.iv), ciphertext: bytesToBase64(sealed.ciphertext), signature: bytesToBase64(sealed.signature),
+      }));
+      await waitFor(() => b.frames.find((f) => f.t === 'message'));
+
+      // Cara is not in it, so she cannot add anyone to it - not even herself.
+      c.ws.send(JSON.stringify({
+        t: 'addMembers', conversationId,
+        members: [{ userId: caraId, wrappedKey: packWrappedKey(await wrapKeyFor(convKey, base64ToBytes(caraSummary.keys.encPub))) }],
+      }));
+      const refused = (await waitFor(() => c.frames.find((f) => f.t === 'error'))) as Extract<ServerMessage, { t: 'error' }>;
+      expect(refused.code).toBe('not_a_member');
+
+      // Bob, who is in it, adds her. The key is wrapped by him, client-side.
+      const wrapForCara = packWrappedKey(await wrapKeyFor(convKey, base64ToBytes(caraSummary.keys.encPub)));
+      b.ws.send(JSON.stringify({ t: 'addMembers', conversationId, members: [{ userId: caraId, wrappedKey: wrapForCara }] }));
+
+      const cConv = (await waitFor(() => c.frames.find((f) => f.t === 'conversation'))) as Extract<ServerMessage, { t: 'conversation' }>;
+      expect(cConv.conversation.id).toBe(conversationId);
+      expect([...cConv.conversation.memberIds].sort()).toEqual([aliceId, bobId, caraId].sort());
+      // Three people is a group, whatever this started as.
+      expect(cConv.conversation.kind).toBe('group');
+
+      // Alice, already in it, is told about the new membership too.
+      const aConv = await waitFor(() =>
+        a.frames.find((f): f is Extract<ServerMessage, { t: 'conversation' }> =>
+          f.t === 'conversation' && f.conversation.memberIds.length === 3),
+      );
+      expect(aConv.conversation.kind).toBe('group');
+
+      // Her key opens the thread, including what was said before she arrived -
+      // one key per conversation, no re-keying, which is the stated trade.
+      const cKey = (await waitFor(() => c.frames.find((f) => f.t === 'key'))) as Extract<ServerMessage, { t: 'key' }>;
+      const caraConvKey = await unwrapKey(unpackWrappedKey(cKey.wrappedKey), cara.encPriv);
+      expect(bytesToBase64(caraConvKey)).toBe(bytesToBase64(convKey));
+
+      c.ws.send(JSON.stringify({ t: 'history', conversationId }));
+      const page = (await waitFor(() => c.frames.find((f) => f.t === 'history'))) as Extract<ServerMessage, { t: 'history' }>;
+      expect(page.messages).toHaveLength(1);
+      const old = page.messages[0]!;
+      const opened = await openMessage(
+        caraConvKey,
+        base64ToBytes(aReady.you.keys.sigPub),
+        { conversationId, senderId: aliceId, seq: old.seq },
+        { iv: base64ToBytes(old.iv), ciphertext: base64ToBytes(old.ciphertext), signature: base64ToBytes(old.signature) },
+      );
+      expect(bytesToUtf8(opened)).toBe('said before cara');
+
+      // She is a member now, so she can speak into it.
+      const hers = await sealMessage(caraConvKey, cara.sigPriv, { conversationId, senderId: caraId, seq: 1 }, utf8ToBytes('hello both'));
+      const mark = a.frames.length;
+      c.ws.send(JSON.stringify({
+        t: 'send', conversationId, seq: 1,
+        iv: bytesToBase64(hers.iv), ciphertext: bytesToBase64(hers.ciphertext), signature: bytesToBase64(hers.signature),
+      }));
+      const toAlice = await waitFor(() =>
+        a.frames.slice(mark).find((f): f is Extract<ServerMessage, { t: 'message' }> => f.t === 'message'),
+      );
+      expect(toAlice.message.senderId).toBe(caraId);
+
+      // Adding her twice is refused rather than re-keying her.
+      const twice = c.frames.length;
+      b.ws.send(JSON.stringify({ t: 'addMembers', conversationId, members: [{ userId: caraId, wrappedKey: wrapForCara }] }));
+      const again = (await waitFor(() => b.frames.find((f) => f.t === 'error'))) as Extract<ServerMessage, { t: 'error' }>;
+      expect(again.code).toBe('bad_message');
+      expect(c.frames.slice(twice).some((f) => f.t === 'key')).toBe(false);
+      expect(await h.store.memberIds(conversationId)).toHaveLength(3);
+
+      a.ws.close();
+      b.ws.close();
+      c.ws.close();
+    });
+
+    test('someone outside the room cannot be added to a conversation', async () => {
+      const h = await startServer(makeStore());
+      servers.push(h.server);
+
+      const alice = identityFromMnemonic(generateMnemonicPhrase());
+      const { userId: aliceId, roomId } = await bootstrapRoom(h.base, 'alice', alice);
+      const aliceCookie = await login(h.base, 'alice', alice);
+      // An outsider with a real account, in their own room, never in this one.
+      const outsider = identityFromMnemonic(generateMnemonicPhrase());
+      const { userId: outsiderId } = await bootstrapRoom(h.base, 'outsider', outsider);
+
+      const a = openSocket(h.base, aliceCookie, roomId);
+      await waitFor(() => a.frames.find((f) => f.t === 'ready'));
+
+      const convKey = generateConversationKey();
+      a.ws.send(JSON.stringify({
+        t: 'createConversation', kind: 'group', titleCiphertext: null,
+        members: [{ userId: aliceId, wrappedKey: packWrappedKey(await wrapKeyFor(convKey, alice.encPub)) }],
+      }));
+      const made = (await waitFor(() => a.frames.find((f) => f.t === 'conversation'))) as Extract<ServerMessage, { t: 'conversation' }>;
+
+      a.ws.send(JSON.stringify({
+        t: 'addMembers', conversationId: made.conversation.id,
+        members: [{ userId: outsiderId, wrappedKey: packWrappedKey(await wrapKeyFor(convKey, outsider.encPub)) }],
+      }));
+      const err = (await waitFor(() => a.frames.find((f) => f.t === 'error'))) as Extract<ServerMessage, { t: 'error' }>;
+      expect(err.code).toBe('not_a_room_member');
+      expect(await h.store.memberIds(made.conversation.id)).toEqual([aliceId]);
+
+      a.ws.close();
+    });
+
     test('a socket is refused for a room the user is not in', async () => {
       const h = await startServer(makeStore());
       servers.push(h.server);

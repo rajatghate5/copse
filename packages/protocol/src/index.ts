@@ -197,6 +197,17 @@ export type ClientMessage =
       ciphertext: string;
       signature: string;
     }
+  /**
+   * Add people to a conversation you are already in. Their wrapped keys are
+   * made client-side, which is the only way they can be - the server has never
+   * held the conversation key and cannot wrap it for anyone.
+   *
+   * There is one key per conversation and no re-keying, so whoever is added can
+   * read the whole thread, including what was said before they arrived. That is
+   * a property of the design (no forward secrecy, a shared key all members
+   * hold), so the client states it rather than implying otherwise.
+   */
+  | { t: 'addMembers'; conversationId: string; members: MemberKey[] }
   /** Ask for a page of history, older than `before` (a message id) if given. */
   | { t: 'history'; conversationId: string; before?: string }
   /** Fire-and-forget typing indicator. Never stored. */

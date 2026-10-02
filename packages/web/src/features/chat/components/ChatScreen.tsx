@@ -20,6 +20,7 @@ import { Composer } from '@/features/chat/components/Composer.tsx';
 import { ConversationList } from '@/features/chat/components/ConversationList.tsx';
 import { SafetyNumberSheet } from '@/features/chat/components/SafetyNumberSheet.tsx';
 import { NewConversationDialog } from '@/features/chat/components/NewConversationDialog.tsx';
+import { AddMembersDialog } from '@/features/chat/components/AddMembersDialog.tsx';
 import { RoomSwitcher } from '@/features/rooms/RoomSwitcher.tsx';
 import { ProfilePanel } from '@/features/profile/ProfilePanel.tsx';
 import { Brand, ThemeToggle } from '@/components/common.tsx';
@@ -27,6 +28,7 @@ import { ChevronLeft } from '@/assets/svgs/chevron-left/index.tsx';
 import { Lock } from '@/assets/svgs/lock/index.tsx';
 import { Shield } from '@/assets/svgs/shield/index.tsx';
 import { Gear } from '@/assets/svgs/gear/index.tsx';
+import { UserPlus } from '@/assets/svgs/user-plus/index.tsx';
 
 export function ChatScreen() {
   useSocket();
@@ -42,6 +44,7 @@ export function ChatScreen() {
   const [showNew, setShowNew] = useState(false);
   const [showSafety, setShowSafety] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
 
   const active = activeId ? conversations[activeId] : undefined;
   const { messages, send, notifyTyping } = useChat(activeId);
@@ -101,8 +104,14 @@ export function ChatScreen() {
                     <br />
                     <span className="th-sub">{subtitle}</span>
                   </span>
+                  {/* Add sits before Verify and takes the margin that pushes
+                      the pair right, so the header reads name - add - verify at
+                      every width. */}
+                  <button className="th-add" onClick={() => setShowAdd(true)} title="Add people to this conversation">
+                    <UserPlus /> <span className="th-add-label">Add</span>
+                  </button>
                   {otherUser && (
-                    <button className="verified unverified" onClick={() => setShowSafety(true)}>
+                    <button className="verified unverified" style={{ marginLeft: 0 }} onClick={() => setShowSafety(true)}>
                       <Shield /> Verify
                     </button>
                   )}
@@ -135,6 +144,7 @@ export function ChatScreen() {
       )}
 
       {showNew && <NewConversationDialog onClose={() => setShowNew(false)} />}
+      {showAdd && active && <AddMembersDialog conversation={active} onClose={() => setShowAdd(false)} />}
       {showProfile && <ProfilePanel onClose={() => setShowProfile(false)} />}
       {showSafety && otherUser && <SafetyNumberSheet other={otherUser} onClose={() => setShowSafety(false)} />}
     </div>
