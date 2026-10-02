@@ -52,7 +52,6 @@ interface AuthState {
   signInOnNewDevice: (args: { username: string; passphrase: string }) => Promise<void>;
   /** Replace the identity summary with the server's authoritative one (admin flag). */
   setMe: (me: UserSummary) => void;
-  lock: () => void;
   signOut: () => Promise<void>;
   clearError: () => void;
 }
@@ -179,10 +178,6 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   setMe(me) {
     set({ me });
-  },
-
-  lock() {
-    set({ status: 'locked', identity: null, km: null, me: null, error: null });
   },
 
   async signOut() {
