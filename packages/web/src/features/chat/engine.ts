@@ -15,6 +15,7 @@ import { useChatStore, statusOf, type ChatMessage } from '@/features/chat/store/
 import { SocketService } from '@/features/chat/services/socket.ts';
 import { dequeue, enqueue, pending } from '@/lib/idb.ts';
 import { notifyMessage } from '@/features/chat/notify.ts';
+import { lastConversation, rememberConversation, rememberRoom } from '@/features/chat/place.ts';
 
 export const socket = new SocketService();
 
@@ -34,6 +35,8 @@ export function startEngine(roomId: string): void {
 export function switchRoom(roomId: string): void {
   if (useRoomStore.getState().currentRoomId === roomId) return;
   useRoomStore.getState().setCurrent(roomId);
+  const me = useAuth.getState().me;
+  if (me) rememberRoom(me.id, roomId);
   // A room is a sealed world: drop the old room's directory, conversations and
   // messages so nothing bleeds across, then reopen the socket into the new one.
   useChatStore.getState().reset();
@@ -56,21 +59,39 @@ async function handleFrame(msg: ServerMessage): Promise<void> {
     case 'hello':
       return;
 
-    case 'ready':
+    case 'ready': {
       // The server's identity summary is authoritative (it carries the admin flag).
       useAuth.getState().setMe(msg.you);
       useRoomStore.getState().setRooms(msg.rooms);
       useRoomStore.getState().setCurrent(msg.room.id);
       store.applyReady(msg.users, msg.conversations);
+      rememberRoom(me.id, msg.room.id);
+      // Reopen the thread this account left open here. The remembered id is only
+      // ever a hint: it opens if the server just listed it, and is otherwise
+      // dropped, so a deleted conversation lands on the roster rather than on a
+      // thread that cannot exist.
+      const wanted = lastConversation(me.id, msg.room.id);
+      if (wanted && msg.conversations.some((c) => c.id === wanted)) {
+        store.setActive(wanted);
+      }
       return;
+    }
 
     case 'user':
       store.addUser(msg.user);
       return;
 
-    case 'conversation':
+    case 'conversation': {
       store.addConversation(msg.conversation);
+      // The store opens the first conversation to appear when nothing is open.
+      // Keep the memory in step with what is on screen, so a reload right after
+      // starting a chat comes back to that chat.
+      const roomId = useRoomStore.getState().currentRoomId;
+      if (roomId && useChatStore.getState().activeId === msg.conversation.id) {
+        rememberConversation(me.id, roomId, msg.conversation.id);
+      }
       return;
+    }
 
     case 'key': {
       await km.acceptWrappedKey(msg.conversationId, msg.wrappedKey);
@@ -183,6 +204,18 @@ export async function sendText(conversationId: string, text: string): Promise<vo
   useChatStore.getState().addOptimistic(optimistic);
   await enqueue({ clientId, conversationId, seq: enc.seq, iv: enc.iv, ciphertext: enc.ciphertext, signature: enc.signature, plaintext: text, createdAt: Date.now() });
   socket.send({ t: 'send', conversationId, seq: enc.seq, iv: enc.iv, ciphertext: enc.ciphertext, signature: enc.signature });
+}
+
+/**
+ * Open a conversation and remember it as this account's place in this room, so a
+ * reload comes back to it. The store and the memory move together - a thread
+ * opened without going through here would be forgotten on refresh.
+ */
+export function openConversation(conversationId: string): void {
+  useChatStore.getState().setActive(conversationId);
+  const me = useAuth.getState().me;
+  const roomId = useRoomStore.getState().currentRoomId;
+  if (me && roomId) rememberConversation(me.id, roomId, conversationId);
 }
 
 /** Create a direct or group conversation with the given other members. */

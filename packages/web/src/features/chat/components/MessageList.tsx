@@ -4,8 +4,20 @@
  * each row measures itself and feeds its height back to the list.
  *
  * Auto-scroll is deliberate: we jump to the newest message only when the reader
- * is already at the bottom, so arriving messages never yank someone away from
+ * is already at the end, so arriving messages never yank someone away from
  * older text they're reading.
+ *
+ * "Already at the end" has to mean the reader's own scrolling, which is the
+ * whole difficulty here. A row's height is unknown until it has rendered, so
+ * opening a thread scrolls to the end using 56px guesses, the real heights land,
+ * the content grows underneath, and the end is suddenly far below the viewport -
+ * which, measured naively, looks exactly like someone who scrolled up to read.
+ * It would then stop following and leave the thread parked in old messages. So
+ * the pin is dropped only by a scroll event the browser attributes to the user
+ * (`scrollUpdateWasRequested === false`), and every measurement that moves the
+ * end re-follows it while pinned. The component is also keyed by conversation
+ * where it's used, so the height cache and the pin start clean per thread rather
+ * than aiming the new thread with the old one's measurements.
  */
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -70,24 +82,39 @@ export function MessageList({ messages, isGroup, nameOf, typingNames }: Props) {
 
   const { ref, width, height } = useSize();
   const listRef = useRef<VariableSizeList>(null);
+  const outerRef = useRef<HTMLDivElement>(null);
   const heights = useRef<Record<number, number>>({});
-  const atBottom = useRef(true);
+  /** Follow the newest message, until the reader scrolls away themselves. */
+  const pinned = useRef(true);
 
   const sizeOf = (i: number) => heights.current[i] ?? 56;
 
-  const measure = (i: number, h: number) => {
-    if (heights.current[i] !== h) {
-      heights.current[i] = h;
-      listRef.current?.resetAfterIndex(i);
-    }
+  const toEnd = () => {
+    if (rows.length > 0) listRef.current?.scrollToItem(rows.length - 1, 'end');
   };
 
-  // Stick to the bottom when new rows arrive and we were already there.
+  const measure = (i: number, h: number) => {
+    if (heights.current[i] === h) return;
+    heights.current[i] = h;
+    listRef.current?.resetAfterIndex(i);
+    // The row just changed the total height, so the end has moved away from
+    // wherever we last scrolled. Chase it until the heights stop changing.
+    if (pinned.current) requestAnimationFrame(toEnd);
+  };
+
+  // Stick to the end when the stream grows and we were already there. Keyed on
+  // the last row too, not only the count: a reconciled echo or a day divider can
+  // change what the end is without changing how many rows there are.
+  const lastKey = rows[rows.length - 1]?.key ?? '';
   useEffect(() => {
-    if (atBottom.current && rows.length > 0) {
-      listRef.current?.scrollToItem(rows.length - 1, 'end');
-    }
-  }, [rows.length]);
+    if (pinned.current) toEnd();
+  }, [rows.length, lastKey]);
+
+  // The viewport itself can appear after the rows (a hidden pane, a resize), and
+  // a list with no height cannot scroll - so land on the end once it has one.
+  useEffect(() => {
+    if (height > 0 && pinned.current) toEnd();
+  }, [height]);
 
   const Row = ({ index, style }: ListChildComponentProps) => {
     const row = rows[index]!;
@@ -121,13 +148,19 @@ export function MessageList({ messages, isGroup, nameOf, typingNames }: Props) {
       {width > 0 && height > 0 && (
         <VariableSizeList
           ref={listRef}
+          outerRef={outerRef}
           height={height}
           width={width}
           itemCount={rows.length}
           itemSize={sizeOf}
           itemKey={(i) => rows[i]!.key}
-          onItemsRendered={({ visibleStopIndex }) => {
-            atBottom.current = visibleStopIndex >= rows.length - 1;
+          onScroll={({ scrollUpdateWasRequested }) => {
+            // Our own scrollToItem calls report `true`; only the reader's own
+            // scrolling decides whether to keep following the newest message.
+            if (scrollUpdateWasRequested) return;
+            const el = outerRef.current;
+            if (!el) return;
+            pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
           }}
         >
           {Row}

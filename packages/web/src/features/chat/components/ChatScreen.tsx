@@ -4,9 +4,12 @@
  * flows from the store and the engine.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChatStore } from '@/features/chat/store/chatStore.ts';
 import { useAuth } from '@/features/auth/authStore.ts';
+import { useRoomStore } from '@/features/rooms/roomStore.ts';
+import { openConversation as openAndRemember } from '@/features/chat/engine.ts';
+import { lastConversation } from '@/features/chat/place.ts';
 import { useSocket } from '@/features/chat/hooks/useSocket.ts';
 import { useChat } from '@/features/chat/hooks/useChat.ts';
 import { useTypingIndicator } from '@/features/chat/hooks/useTypingIndicator.ts';
@@ -32,7 +35,6 @@ export function ChatScreen() {
   const conversations = useChatStore((s) => s.conversations);
   const users = useChatStore((s) => s.users);
   const activeId = useChatStore((s) => s.activeId);
-  const setActive = useChatStore((s) => s.setActive);
   const me = useAuth((s) => s.me!);
   const storageBlocked = useAuth((s) => s.storageBlocked);
 
@@ -52,9 +54,23 @@ export function ChatScreen() {
   const otherUser = otherId ? users[otherId] : undefined;
 
   const openConversation = (id: string) => {
-    setActive(id);
+    openAndRemember(id);
     setView('thread');
   };
+
+  /**
+   * On a reload the engine reopens the thread you left; on the narrow layout the
+   * roster sits on top of it, so the restore has to move the view as well -
+   * once, and only for the thread that was actually remembered, so a
+   * conversation someone else starts can never yank you into it.
+   */
+  const followedRestore = useRef(false);
+  useEffect(() => {
+    if (followedRestore.current || !activeId) return;
+    followedRestore.current = true;
+    const roomId = useRoomStore.getState().currentRoomId;
+    if (roomId && lastConversation(me.id, roomId) === activeId) setView('thread');
+  }, [activeId, me.id]);
 
   return (
     <div className="frame">
@@ -92,7 +108,10 @@ export function ChatScreen() {
                   )}
                 </div>
 
-                <MessageList messages={messages} isGroup={active.kind === 'group'} nameOf={nameOf} typingNames={typingNames} />
+                {/* Keyed by conversation: the list caches measured row heights
+                    and whether the reader is at the end, and neither means
+                    anything in a different thread. */}
+                <MessageList key={active.id} messages={messages} isGroup={active.kind === 'group'} nameOf={nameOf} typingNames={typingNames} />
 
                 {connection !== 'online' && (
                   <div className={`conn-banner ${connection === 'connecting' ? 'waking' : 'reconnecting'}`}>

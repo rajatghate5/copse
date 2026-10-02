@@ -7,11 +7,11 @@
  * accumulates: a new setting is one more row in an existing group, not another
  * heading and another full-width button.
  *
- * The limits are stated, not implied. A count on its own ("2 / 3", "3/10") only
- * means something if you already know the caps, and the caps are not symmetric:
- * a room holds ROOM_MAX_MEMBERS for everyone, admin included, while only the
- * number of rooms per person is lifted for the admin. Both come from
- * @copse/protocol, so this text cannot drift from what the server enforces.
+ * The limits ride along with the counts ("2 of 3", "4 of 10") rather than in a
+ * paragraph under them: "x of y" already names the cap, and the prose repeating
+ * it was the longest thing in the sheet. Both numbers come from @copse/protocol,
+ * so they cannot drift from what the server enforces. The one asymmetry worth a
+ * word — the admin's lifted room count — is said in the Rooms label itself.
  *
  * No key fingerprint here on purpose. The one it used to show was the server's
  * copy of the signing key with nothing local to compare it against, so it could
@@ -127,12 +127,6 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
               </div>
             ))}
           </div>
-          <p className="pm-note">
-            Up to {ROOM_MAX_MEMBERS} people in a room.{' '}
-            {me.isAdmin
-              ? `As admin you can make as many rooms as you like — the ${ROOM_MAX_MEMBERS}-person cap still applies to each one.`
-              : `You can be in ${MAX_ROOMS_PER_USER} rooms at a time.`}
-          </p>
 
           <div className="pm-label"><span>Settings</span></div>
           <div className="pm-group">
@@ -158,7 +152,7 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
           <p className="pm-note">
             {blocked
               ? 'This browser has blocked notifications for Copse. Allow them in its site settings first.'
-              : 'Only who sent it, never what they said — a notification is drawn by the operating system, and lands on lock screens and in its logs.'}
+              : 'Shows who sent it, never what they said — the OS draws it, and keeps it.'}
           </p>
 
           <div className="pm-group pm-last">
@@ -170,8 +164,7 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
             </button>
           </div>
           <p className="pm-note">
-            Signing out removes this account from this device, so coming back needs your
-            username as well as your passphrase.
+            Removes this account from this device — coming back needs your username too.
           </p>
         </div>
       </div>
