@@ -147,7 +147,11 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .member { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; }
 .member.on { border-color: var(--accent); background: var(--accent-soft); }
 .member .mname { font-size: 14px; font-weight: 600; }
-.member .mcheck { margin-left: auto; color: var(--accent); width: 18px; height: 18px; }
+/* A visible box, so two of them ticked is what tells you a group is possible. */
+.member .mbox { width: 20px; height: 20px; flex: none; border-radius: 6px; border: 1.5px solid var(--line); background: var(--panel); display: grid; place-items: center; color: #fff; }
+.member .mbox svg { width: 13px; height: 13px; }
+.member.on .mbox { background: var(--accent); border-color: var(--accent); }
+.msum { margin: 0 0 12px; font-size: 13px; line-height: 1.45; color: var(--muted); min-height: 19px; }
 
 @media (max-width: 620px) {
   .app { grid-template-columns: 1fr; }
