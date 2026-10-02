@@ -7,6 +7,8 @@
  *   unset                   -> local file, data in COPSE_DB (offline / hotspot)
  */
 
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { RETENTION_MS } from '@copse/protocol';
 import { createServer } from './server.ts';
 import { SqliteStore } from './store-sqlite.ts';
@@ -33,7 +35,19 @@ function chooseStore(): { store: Store; where: string } {
     return { store: new TursoStore(url, token), where: `Turso (${new URL(url).host})` };
   }
   const path = process.env.COPSE_DB ?? './copse.db';
-  return { store: new SqliteStore(path), where: `local file (${path})` };
+  try {
+    // bun:sqlite creates the file but not the directory holding it, so a
+    // perfectly reasonable COPSE_DB=./data/copse.db would fail on a fresh
+    // checkout.
+    mkdirSync(dirname(path), { recursive: true });
+    return { store: new SqliteStore(path), where: `local file (${path})` };
+  } catch (err) {
+    // SQLITE_CANTOPEN reads like a corrupt database and is nearly always a
+    // directory this process cannot write - say which, since the stack trace
+    // points at bun:sqlite and names neither.
+    console.error(`cannot open the database at ${path} - is its directory writable by this user?`);
+    throw err;
+  }
 }
 
 const { store, where } = chooseStore();

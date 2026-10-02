@@ -32,7 +32,19 @@ COPY --from=build /app ./
 
 ENV PORT=4040
 ENV COPSE_STATIC=/app/packages/web/dist
-# COPSE_INVITE must be provided at run time, or registration stays closed.
+
+# Local-SQLite mode writes a file, and this image runs as a non-root user over a
+# root-owned /app - so the default of ./copse.db could not be created at all
+# (SQLITE_CANTOPEN, which reads like a corrupt database and is really a
+# directory the process cannot write). State gets its own writable directory,
+# outside the code tree, declared as a volume so `docker rm` does not quietly
+# take the messages with it. Mount a named volume (-v copse-data:/data) to keep
+# them across a recreate. Hosted mode (TURSO_DATABASE_URL) ignores all of this.
+RUN mkdir -p /data && chown bun:bun /data
+ENV COPSE_DB=/data/copse.db
+VOLUME /data
+
+# COPSE_BOOTSTRAP must be provided at run time, or no first room can be created.
 EXPOSE 4040
 
 USER bun
