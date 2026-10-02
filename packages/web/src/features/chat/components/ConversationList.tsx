@@ -9,6 +9,7 @@ import { useAuth } from '@/features/auth/authStore.ts';
 import { conversationName, otherMemberIds, previewOf } from '@/features/chat/selectors.ts';
 import { messageTime } from '@/lib/format.ts';
 import { Avatar } from '@/features/chat/components/Avatar.tsx';
+import { ListSkeleton } from '@/components/Skeleton.tsx';
 import { Plus } from '@/assets/svgs/plus/index.tsx';
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
 export function ConversationList({ onSelect, onNew }: Props) {
   const conversations = useChatStore((s) => s.conversations);
   const messages = useChatStore((s) => s.messages);
+  const connection = useChatStore((s) => s.connection);
   const users = useChatStore((s) => s.users);
   const activeId = useChatStore((s) => s.activeId);
   const meId = useAuth((s) => s.me?.id ?? '');
@@ -38,7 +40,12 @@ export function ConversationList({ onSelect, onNew }: Props) {
         </button>
       </div>
       <div className="rlist">
-        {list.length === 0 && <div className="empty">No conversations yet. Start one with the + button.</div>}
+        {/* Nothing loaded AND not connected yet is not the same claim as "none
+            exist" - hold the shape until the ready frame has actually landed. */}
+        {list.length === 0 && connection !== 'online' && <ListSkeleton rows={4} />}
+        {list.length === 0 && connection === 'online' && (
+          <div className="empty">No conversations yet. Start one with the + button.</div>
+        )}
         {list.map((conv) => {
           const name = conversationName(conv, users, meId);
           const msgs = messages[conv.id];

@@ -285,3 +285,33 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
    plainly: the alternative is the user being silently signed out on reload. */
 .store-warn { flex: none; margin-top: 10px; padding: 9px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.45; background: color-mix(in srgb, var(--warm) 13%, var(--panel)); color: var(--exp); border: 1px solid color-mix(in srgb, var(--warm) 28%, transparent); }
 .p-note { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: var(--faint); }
+
+/* ---------- loading skeletons ----------
+   A sweep across a token-coloured block, so it reads in both themes. The
+   skeleton mirrors the real layout's measurements, which is the whole point:
+   the content replaces it without moving anything. */
+.sk { display: block; position: relative; overflow: hidden; border-radius: 8px; background: var(--panel-2); }
+.sk::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 7%, transparent), transparent);
+  animation: sk-sweep 1.4s ease-in-out infinite; }
+@keyframes sk-sweep { to { transform: translateX(100%); } }
+
+.sk-brand { width: 104px; height: 24px; border-radius: 7px; }
+.sk-circle { width: 38px; height: 38px; border-radius: 50%; flex: none; }
+.sk-av { width: 40px; height: 40px; border-radius: 50%; flex: none; }
+.sk-line { height: 12px; border-radius: 6px; }
+.sk-line.sk-thin { height: 9px; opacity: .72; }
+
+.sk-col { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
+.sk-thread { display: flex; flex-direction: column; min-width: 0; }
+.sk-head { display: flex; align-items: center; gap: 12px; padding: 17px 16px; border-bottom: 1px solid var(--line); flex: none; }
+.sk-list { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.sk-row { display: flex; align-items: center; gap: 11px; padding: 6px 2px; }
+.sk-lines { display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0; }
+.sk-msgs { padding: 18px 16px; display: flex; flex-direction: column; gap: 12px; }
+.sk-bubble { height: 38px; border-radius: 17px; }
+.sk-bubble.mine { align-self: flex-end; }
+
+/* A sweep is decoration; the layout still has to read without it. */
+@media (prefers-reduced-motion: reduce) { .sk::after { animation: none; } }
+@media (max-width: 760px) { .sk-col { border-right: 0; } .sk-thread { display: none; } }

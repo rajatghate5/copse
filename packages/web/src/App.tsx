@@ -8,7 +8,7 @@ import { useEffect } from 'react';
 import { useAuth } from '@/features/auth/authStore.ts';
 import { AuthScreens } from '@/features/auth/AuthScreens.tsx';
 import { ChatScreen } from '@/features/chat/components/ChatScreen.tsx';
-import { Brand, ThemeToggle } from '@/components/common.tsx';
+import { AppSkeleton } from '@/components/Skeleton.tsx';
 
 export function App() {
   const status = useAuth((s) => s.status);
@@ -16,14 +16,7 @@ export function App() {
 
   useEffect(() => { void boot(); }, [boot]);
 
-  if (status === 'loading') {
-    return (
-      <div className="frame">
-        <div className="topbar"><Brand /><span className="spacer" /><ThemeToggle /></div>
-        <div className="stage"><div className="empty" style={{ margin: 'auto' }}>Loading…</div></div>
-      </div>
-    );
-  }
+  if (status === 'loading') return <AppSkeleton />;
 
   return status === 'ready' ? <ChatScreen /> : <AuthScreens />;
 }
