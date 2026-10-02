@@ -1,7 +1,14 @@
 /**
  * Profile & settings, in one sheet: who you are, the rooms you're in, appearance,
- * your key fingerprint, and sign out. It reads identity from the auth store and
- * rooms from the room store; it owns no data of its own.
+ * and sign out. It reads identity from the auth store and rooms from the room
+ * store; it owns no data of its own.
+ *
+ * No key fingerprint here on purpose. The one it used to show was the server's
+ * copy of your signing key with nothing local to compare it against, so it could
+ * not catch a substituted key - and it left out encPub, which is the key that
+ * actually protects message contents. Verification lives where it works: the
+ * pairwise safety number (`crypto/safety.ts`), reachable from a thread's Verify
+ * button.
  */
 
 import { MAX_ROOMS_PER_USER, ROOM_MAX_MEMBERS } from '@copse/protocol';
@@ -10,12 +17,6 @@ import { useRoomStore } from '@/features/rooms/roomStore.ts';
 import { ThemeToggle } from '@/components/common.tsx';
 import { initials } from '@/lib/format.ts';
 import { LogOut } from '@/assets/svgs/log-out/index.tsx';
-
-/** A short, readable fingerprint of a public key, for an at-a-glance self-check. */
-function fingerprint(sigPub: string): string {
-  const compact = sigPub.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 16);
-  return (compact.match(/.{1,4}/g) ?? []).join(' ');
-}
 
 export function ProfilePanel({ onClose }: { onClose: () => void }) {
   const me = useAuth((s) => s.me!);
@@ -50,9 +51,6 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
 
         <div className="p-sect"><span>Appearance</span></div>
         <ThemeToggle />
-
-        <div className="p-sect"><span>Security · your key</span></div>
-        <div className="fingerprint">{fingerprint(me.keys.sigPub)}</div>
 
         <button className="btn danger-btn" onClick={() => void signOut()}><LogOut /> Sign out &amp; lock</button>
         <button className="btn secondary" style={{ marginTop: 10 }} onClick={onClose}>Close</button>

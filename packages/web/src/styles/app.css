@@ -189,7 +189,6 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .p-room { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 7px; background: var(--panel-2); }
 .p-rname { font-weight: 600; font-size: 14px; }
 .p-rmeta { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--faint); }
-.fingerprint { font-family: var(--mono); font-size: 13px; letter-spacing: .06em; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; text-align: center; }
 .btn.danger-btn { background: transparent; color: var(--danger); border: 1px solid var(--line); margin-top: 16px; }
 .btn.danger-btn:hover { filter: none; background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .btn.danger-btn svg { width: 16px; height: 16px; }
