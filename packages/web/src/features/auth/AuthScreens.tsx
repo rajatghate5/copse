@@ -100,7 +100,12 @@ function UnlockScreen() {
       >
         <div className="lock-head">
           <h1>{account ? account.displayName : 'Welcome back'}</h1>
-          {account && <div className="lock-user">@{account.username}</div>}
+          {/* The handle only earns a line of its own when it says something the
+              name above does not - a device that signed in with just a username
+              has the two the same until the server names you. */}
+          {account && account.displayName !== account.username && (
+            <div className="lock-user">@{account.username}</div>
+          )}
         </div>
         <PassphraseField id="unlock-pass" label="Passphrase" value={pass} placeholder="Your passphrase" autoFocus onChange={(v) => { setPass(v); clearError(); }} />
         {error && <div className="pperr">{error}</div>}

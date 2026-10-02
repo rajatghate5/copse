@@ -22,7 +22,7 @@ import {
   signChallenge,
   type Vault,
 } from '@copse/crypto';
-import type { UserSummary } from '@copse/protocol';
+import { cleanUsername, type UserSummary } from '@copse/protocol';
 import * as api from '@/lib/api.ts';
 import { KeyManager } from '@/features/chat/crypto/keyManager.ts';
 import { useRoomStore } from '@/features/rooms/roomStore.ts';
@@ -187,9 +187,15 @@ export const useAuth = create<AuthState>((set, get) => ({
     }
   },
 
-  async signInOnNewDevice({ username, passphrase }) {
+  async signInOnNewDevice({ username: typed, passphrase }) {
     set({ busy: true, error: null });
     try {
+      // Normalise exactly as the server does on every username path, so the copy
+      // kept on this device is the handle itself. Storing what was typed meant
+      // "@rajat" authenticated fine (the server strips it) while the unlock
+      // screen then printed it under its own @.
+      const username = cleanUsername(typed);
+      if (!username) throw new Error('no account with that username');
       const blob = await api.fetchVault(username);
       if (!blob) throw new Error('no account with that username');
       const mnemonic = await openMnemonic(passphrase, {
@@ -200,6 +206,8 @@ export const useAuth = create<AuthState>((set, get) => ({
       const identity = identityFromMnemonic(mnemonic);
       const userId = await establishSession(username, identity);
       await arm(mnemonic);
+      // A device signing in with only a username knows no display name yet; the
+      // handle stands in until the server's `ready` frame names them (setMe).
       const account: StoredAccount = { userId, username, displayName: username, vault: blob };
       set({ storageBlocked: !(await saveAccount(account)) });
       await ready(set, account, identity);
@@ -213,6 +221,16 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   setMe(me) {
     set({ me });
+    // The server's summary is the authoritative one, so reconcile the account
+    // stored on this device with it. This is what fills in the display name for
+    // a device that signed in with only a username, and it is a one-time write:
+    // the next `ready` frame finds the two already equal.
+    const account = get().account;
+    if (account && (account.displayName !== me.displayName || account.username !== me.username)) {
+      const corrected: StoredAccount = { ...account, displayName: me.displayName, username: me.username };
+      set({ account: corrected });
+      void saveAccount(corrected);
+    }
   },
 
   lock() {
