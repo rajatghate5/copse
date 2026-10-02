@@ -4,18 +4,19 @@
  * auth status (locked → unlock) and a local mode toggle (register ↔ sign in).
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/features/auth/authStore.ts';
 import { Brand, ThemeToggle } from '@/components/common.tsx';
 import { Eye } from '@/assets/svgs/eye/index.tsx';
 import { EyeOff } from '@/assets/svgs/eye-off/index.tsx';
 import { Key } from '@/assets/svgs/key/index.tsx';
 import { Lock } from '@/assets/svgs/lock/index.tsx';
-import { Huddle } from '@/features/welcome/Huddle.tsx';
+import { ArtPanel } from '@/features/auth/ArtPanel.tsx';
 
 /** A passphrase field with a show/hide toggle. Local state only. */
-function PassphraseField({ id, label, value, onChange, placeholder }: {
+function PassphraseField({ id, label, value, onChange, placeholder, autoFocus = false }: {
   id: string; label: string; value: string; onChange: (v: string) => void; placeholder: string;
+  autoFocus?: boolean;
 }) {
   const [show, setShow] = useState(false);
   return (
@@ -28,6 +29,7 @@ function PassphraseField({ id, label, value, onChange, placeholder }: {
           type={show ? 'text' : 'password'}
           placeholder={placeholder}
           autoComplete="new-password"
+          autoFocus={autoFocus}
           value={value}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -39,42 +41,70 @@ function PassphraseField({ id, label, value, onChange, placeholder }: {
   );
 }
 
+/**
+ * Every pre-chat screen sits in the same two halves: the art panel states the
+ * one claim worth making, the form half holds the fields. Below 860px the panel
+ * is gone and this is just a form — which is the shape a lock screen wants on a
+ * phone anyway.
+ */
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <>
-      <Huddle />
-      <div className="frame">
-        <div className="topbar">
+    <div className="split">
+      <ArtPanel />
+      <main className="pane-form">
+        <div className="pane-top">
           <Brand />
-          <span className="spacer" />
           <ThemeToggle />
         </div>
-        <div className="stage">
+        <div className="pane-mid">
           <div className="center">{children}</div>
         </div>
-      </div>
-    </>
+      </main>
+    </div>
   );
 }
 
+/**
+ * The screen the four of them actually live with: not a welcome page but a lock
+ * screen, met several times a day by someone it already knows. So it leads with
+ * who you are rather than what Copse is, focuses the one field that matters, and
+ * takes Enter. The marketing of the security model belongs on the screens below,
+ * which are seen once; here it is a single quiet line.
+ */
 function UnlockScreen() {
   const { account, unlock, signOut, busy, error, clearError } = useAuth();
   const [pass, setPass] = useState('');
+  const [shake, setShake] = useState(false);
+
+  // `unlock` clears the error before each attempt, so this replays on every
+  // failure rather than only the first.
+  useEffect(() => {
+    if (!error) return;
+    setShake(true);
+    const t = setTimeout(() => setShake(false), 420);
+    return () => clearTimeout(t);
+  }, [error]);
+
   return (
     <Shell>
-      <div className="card">
-        <div className="hero-mark"><Lock /></div>
-        <h1>Welcome back{account ? `, ${account.displayName}` : ''}</h1>
-        <p className="sub">Enter your passphrase to unlock this device. Your keys are decrypted here and never leave.</p>
-        <PassphraseField id="unlock-pass" label="Passphrase" value={pass} placeholder="Your passphrase" onChange={(v) => { setPass(v); clearError(); }} />
+      <form
+        className={`card${shake ? ' shake' : ''}`}
+        onSubmit={(e) => { e.preventDefault(); if (!busy && pass) void unlock(pass); }}
+      >
+        <div className="lock-head">
+          <h1>{account ? account.displayName : 'Welcome back'}</h1>
+          {account && <div className="lock-user">@{account.username}</div>}
+        </div>
+        <PassphraseField id="unlock-pass" label="Passphrase" value={pass} placeholder="Your passphrase" autoFocus onChange={(v) => { setPass(v); clearError(); }} />
         {error && <div className="pperr">{error}</div>}
-        <button className="btn" disabled={busy || !pass} onClick={() => void unlock(pass)}>
+        <button className="btn" type="submit" disabled={busy || !pass}>
           {busy ? 'Unlocking…' : <><Key /> Unlock</>}
         </button>
         <div className="linkrow">
-          Not you? <button onClick={() => void signOut()}>Use a different account</button>
+          Not you? <button type="button" onClick={() => void signOut()}>Use a different account</button>
         </div>
-      </div>
+        <p className="lock-foot">Unsealed on this device · nothing is sent</p>
+      </form>
     </Shell>
   );
 }

@@ -194,23 +194,72 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .btn.danger-btn:hover { filter: none; background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .btn.danger-btn svg { width: 16px; height: 16px; }
 
-/* ---------- welcome: the "copse of chat" drifting-bubble backdrop ---------- */
-.auth-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; background: radial-gradient(130% 120% at 72% 12%, var(--accent-soft), transparent 70%); }
-.bub { position: absolute; border-radius: 15px; background: var(--c); box-shadow: 0 6px 18px rgba(20, 50, 30, 0.16); animation-name: huddle-float; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
-.bub::after { content: ""; position: absolute; bottom: -5px; left: 13px; border: 6px solid transparent; border-top-color: var(--c); border-right-width: 0; }
-.bub.r::after { left: auto; right: 13px; border-right-width: 6px; border-left-width: 0; }
-.bub .dots { display: flex; gap: 4px; align-items: center; justify-content: center; height: 100%; }
-.bub .dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.85); animation: huddle-typing 1.2s infinite; }
-.bub .dots i:nth-child(2) { animation-delay: 0.16s; }
-.bub .dots i:nth-child(3) { animation-delay: 0.32s; }
-@keyframes huddle-float {
-  0%, 100% { transform: translateY(calc(var(--rise) * 0.4)) scale(0.98); }
-  50% { transform: translateY(calc(var(--rise) * -1)) scale(1.04); }
+/* ---------- the auth split: art left, form right ----------
+   A small room's worth of people meet these screens; the left half carries
+   the one claim worth
+   making, the right half carries the only field that matters. The art is the
+   app's single ambient animation and it stays off phones entirely — a lock
+   screen you are on for three seconds should not composite ten layers on a
+   battery. */
+.split { min-height: 100%; display: flex; flex-wrap: wrap; }
+
+.pane-art { flex: 1 1 500px; position: relative; overflow: hidden; background: #04100a; color: #e4ede7; display: flex; flex-direction: column; }
+.pane-form { flex: 1 1 500px; display: flex; flex-direction: column; background: var(--bg); min-height: 100vh; }
+
+/* The art owns the top 80%; the copy is pinned to the bottom edge. */
+.lane { position: absolute; left: 0; right: 0; top: 0; height: 80%; overflow: hidden; }
+/* A pool of light, so a bubble never sits on flat near-black. */
+.lane::before { content: ""; position: absolute; left: -12%; right: -12%; top: -16%; bottom: -14%; background: radial-gradient(62% 58% at 44% 42%, rgba(76, 154, 116, .22), transparent 74%); }
+/* Reaches only as high as the copy, so it never dims the art above it. */
+.art-scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 26%; background: linear-gradient(to top, rgba(4, 16, 10, .97) 46%, rgba(4, 16, 10, .78) 72%, transparent 100%); }
+.art-brand { position: relative; padding: 36px 46px 0; flex: none; }
+.art-brand .brand { color: #9fe0bd; }
+.art-brand .brand .leaf { color: #4c9a74; }
+.art-copy { position: relative; margin-top: auto; padding: 0 46px 38px; flex: none; }
+.art-copy h2 { margin: 0 0 12px; font-family: var(--serif); font-weight: 600; font-size: 33px; line-height: 1.07; letter-spacing: -.02em; max-width: 15em; }
+.art-copy p { margin: 0; font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #8ea399; }
+
+.turn { position: absolute; }
+.typing, .sealed { position: absolute; inset: 0; border-radius: 18px; box-sizing: border-box; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+.typing { background: var(--c); display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 14px 34px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(226, 243, 233, .16); animation-name: typing-out; }
+.typing::after { content: ""; position: absolute; bottom: -6px; left: 19px; border: 7px solid transparent; border-top-color: var(--c); border-right-width: 0; }
+/* Its own keyframe, not the chat list's `typedot`: that one fades to .35, which
+   is part of why this panel read as washed out. */
+.typing i { width: 9px; height: 9px; border-radius: 50%; background: #fff; animation: art-typedot 1.2s infinite; }
+@keyframes art-typedot { 0%, 60%, 100% { transform: translateY(0); opacity: .55; } 30% { transform: translateY(-5px); opacity: 1; } }
+.typing i:nth-child(2) { animation-delay: .16s; }
+.typing i:nth-child(3) { animation-delay: .32s; }
+.sealed { background: #06130d; border: 1px solid rgba(127, 214, 168, .44); display: flex; align-items: center; padding: 0 15px; overflow: hidden; box-shadow: 0 14px 34px rgba(0, 0, 0, .5), 0 0 24px rgba(127, 214, 168, .12); font-family: var(--mono); font-size: 10.5px; line-height: 1.5; color: rgba(159, 224, 189, .94); word-break: break-all; letter-spacing: .05em; animation-name: sealed-in; }
+/* The two faces hand over at 40-50% with no gap, then the bubble clears for the
+   last tenth of the cycle so the next one reads as a new message. */
+@keyframes typing-out { 0% { opacity: 0; transform: scale(.94); } 6%, 40% { opacity: 1; transform: scale(1); } 50%, 100% { opacity: 0; } }
+@keyframes sealed-in { 0%, 40% { opacity: 0; transform: scale(.97); } 50%, 88% { opacity: 1; transform: scale(1); } 96%, 100% { opacity: 0; } }
+
+/* The form half: the auth cards lose their chrome here - the panel is the frame. */
+.pane-top { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 26px 36px 0; flex: none; }
+.pane-top .brand { margin-right: auto; }
+.pane-mid { flex: 1; display: flex; align-items: center; justify-content: center; padding: 28px 40px 56px; }
+.pane-mid .center { margin: 0; max-width: 396px; }
+.pane-mid .card { background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0; }
+.pane-mid .input { background: var(--panel); }
+/* Only the phone layout needs the brand on the form side; the art panel has it. */
+.pane-top .brand { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .typing, .sealed, .typing i { animation: none; }
+  .typing { opacity: 0; }
+  .sealed { opacity: 1; }
 }
-@keyframes huddle-typing { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 30% { transform: translateY(-4px); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .bub, .bub .dots i { animation: none !important; } }
-/* on narrow screens pull the side bubbles in so they don't clip off-canvas */
-@media (max-width: 560px) { .bub { transform: scale(0.82); } }
-/* lift the auth chrome above the backdrop, and frost the card so the huddle peeks through */
-.frame { position: relative; z-index: 1; }
-.center .card { background: color-mix(in srgb, var(--panel) 88%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+/* Phones get the form and nothing else: no panel, no compositing, no scroll. */
+@media (max-width: 860px) {
+  .pane-art { display: none; }
+  .pane-form { min-height: 100%; }
+  .pane-top .brand { display: inline; }
+  .pane-mid { padding: 24px 20px 48px; }
+}
+
+/* the unlock screen's own head: who this device belongs to */
+.lock-head { margin-bottom: 26px; }
+.lock-head h1 { margin: 0 0 3px; font-size: 32px; }
+.lock-user { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+.lock-foot { margin: 26px 0 0; font-family: var(--mono); font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--faint); }
