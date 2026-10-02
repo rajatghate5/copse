@@ -52,7 +52,10 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
         <div className="p-sect"><span>Appearance</span></div>
         <ThemeToggle />
 
-        <button className="btn danger-btn" onClick={() => void signOut()}><LogOut /> Sign out &amp; lock</button>
+        {/* Just "Sign out": it removes the sealed account from this device, so
+            coming back needs the username as well as the passphrase. The label
+            used to promise a lock too, which this has never done. */}
+        <button className="btn danger-btn" onClick={() => void signOut()}><LogOut /> Sign out</button>
         <button className="btn secondary" style={{ marginTop: 10 }} onClick={onClose}>Close</button>
       </div>
     </div>
