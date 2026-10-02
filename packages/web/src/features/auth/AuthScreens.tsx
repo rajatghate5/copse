@@ -13,10 +13,17 @@ import { Key } from '@/assets/svgs/key/index.tsx';
 import { Lock } from '@/assets/svgs/lock/index.tsx';
 import { ArtPanel } from '@/features/auth/ArtPanel.tsx';
 
-/** A passphrase field with a show/hide toggle. Local state only. */
-function PassphraseField({ id, label, value, onChange, placeholder, autoFocus = false }: {
+/**
+ * A passphrase field with a show/hide toggle. Local state only.
+ *
+ * `autoComplete` matters more than it looks: `current-password` is what lets a
+ * password manager FILL the field, which is the difference between a reload
+ * costing one tap and costing a typed passphrase. Only the two registration
+ * fields want `new-password`, where the manager should offer to save instead.
+ */
+function PassphraseField({ id, label, value, onChange, placeholder, autoFocus = false, autoComplete = 'current-password' }: {
   id: string; label: string; value: string; onChange: (v: string) => void; placeholder: string;
-  autoFocus?: boolean;
+  autoFocus?: boolean; autoComplete?: 'current-password' | 'new-password';
 }) {
   const [show, setShow] = useState(false);
   return (
@@ -28,7 +35,7 @@ function PassphraseField({ id, label, value, onChange, placeholder, autoFocus = 
           className="input"
           type={show ? 'text' : 'password'}
           placeholder={placeholder}
-          autoComplete="new-password"
+          autoComplete={autoComplete}
           autoFocus={autoFocus}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -168,7 +175,7 @@ function RegisterScreen({ toSignIn }: { toSignIn: () => void }) {
             </>
           )}
           <label htmlFor="username">Username</label>
-          <input id="username" className="input" placeholder="how friends find you" value={username} onChange={(e) => setUsername(e.target.value)} />
+          <input id="username" className="input" autoComplete="username" placeholder="how friends find you" value={username} onChange={(e) => setUsername(e.target.value)} />
           <label htmlFor="display">Display name</label>
           <input id="display" className="input" placeholder="what friends see" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           {local && <div className="pperr">{local}</div>}
@@ -184,8 +191,8 @@ function RegisterScreen({ toSignIn }: { toSignIn: () => void }) {
       <div className="card">
         <h1>Set your passphrase</h1>
         <p className="sub">This unlocks Copse on this device and any other you sign in on. Your account is encrypted with it, and only the <b>locked</b> version is ever stored — so choose something only you know.</p>
-        <PassphraseField id="p1" label="Passphrase" value={pass} placeholder="At least 8 characters" onChange={(v) => { setPass(v); clearError(); setLocal(null); }} />
-        <PassphraseField id="p2" label="Confirm passphrase" value={confirm} placeholder="Type it again" onChange={(v) => { setConfirm(v); setLocal(null); }} />
+        <PassphraseField id="p1" label="Passphrase" value={pass} placeholder="At least 8 characters" autoComplete="new-password" onChange={(v) => { setPass(v); clearError(); setLocal(null); }} />
+        <PassphraseField id="p2" label="Confirm passphrase" value={confirm} placeholder="Type it again" autoComplete="new-password" onChange={(v) => { setConfirm(v); setLocal(null); }} />
         {(local || error) && <div className="pperr">{local ?? error}</div>}
         <button className="btn" disabled={busy} onClick={create}>{busy ? 'Creating…' : <><Lock /> {isBootstrap ? 'Create room & account' : 'Create account & join'}</>}</button>
         <button className="btn secondary" style={{ marginTop: 10 }} onClick={() => setStep(1)}>Back</button>
@@ -206,7 +213,7 @@ function SignInScreen({ toRegister }: { toRegister: () => void }) {
         <h1>Sign in</h1>
         <p className="sub">On a new device? Enter your username and passphrase. Your sealed account is fetched and unlocked right here — the server never sees the passphrase.</p>
         <label htmlFor="si-user">Username</label>
-        <input id="si-user" className="input" placeholder="your username" value={username} onChange={(e) => { setUsername(e.target.value); clearError(); }} />
+        <input id="si-user" className="input" autoComplete="username" placeholder="your username" value={username} onChange={(e) => { setUsername(e.target.value); clearError(); }} />
         <PassphraseField id="si-pass" label="Passphrase" value={pass} placeholder="Your passphrase" onChange={(v) => { setPass(v); clearError(); }} />
         {error && <div className="pperr">{error}</div>}
         <button className="btn" disabled={busy || !username || !pass} onClick={() => void signInOnNewDevice({ username: username.trim(), passphrase: pass })}>
