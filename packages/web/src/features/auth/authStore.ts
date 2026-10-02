@@ -38,6 +38,12 @@ interface AuthState {
   km: KeyManager | null;
   busy: boolean;
   error: string | null;
+  /**
+   * Set when this browser would not keep the account. The session still works,
+   * but a reload will land on sign-in instead of the passphrase, so the user has
+   * to be told rather than left guessing.
+   */
+  storageBlocked: boolean;
 
   boot: () => Promise<void>;
   register: (args: {
@@ -101,6 +107,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   km: null,
   busy: false,
   error: null,
+  storageBlocked: false,
 
   async boot() {
     const account = await loadAccount();
@@ -124,7 +131,7 @@ export const useAuth = create<AuthState>((set, get) => ({
         vault: b64(vault),
       });
       const account: StoredAccount = { userId, username, displayName, vault: b64(vault) };
-      await saveAccount(account);
+      set({ storageBlocked: !(await saveAccount(account)) });
       // Enter the room this account just joined or created (held in memory only).
       useRoomStore.getState().setCurrent(roomId);
       await establishSession(username, identity);
@@ -166,7 +173,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       const identity = identityFromMnemonic(mnemonic);
       const userId = await establishSession(username, identity);
       const account: StoredAccount = { userId, username, displayName: username, vault: blob };
-      await saveAccount(account);
+      set({ storageBlocked: !(await saveAccount(account)) });
       await ready(set, account, identity);
     } catch (e) {
       const msg = (e as Error).message?.includes('username')

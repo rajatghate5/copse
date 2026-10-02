@@ -68,8 +68,23 @@ function tx<T>(store: string, mode: IDBTransactionMode, run: (s: IDBObjectStore)
 
 // --- account ---------------------------------------------------------------
 
-export async function saveAccount(a: StoredAccount): Promise<void> {
-  try { await tx('account', 'readwrite', (s) => s.put(a, 'me')); } catch { /* storage blocked */ }
+/**
+ * Store the account and confirm it is really there.
+ *
+ * Every other call here degrades silently, which is right for a cache. This one
+ * cannot: if the write is dropped — a private window, Safari with storage
+ * restrictions, blocked site data — the user is signed in now and signed out on
+ * the next reload, with nothing to explain it. A write can also report success
+ * and still not persist, so the only trustworthy check is to read it back.
+ */
+export async function saveAccount(a: StoredAccount): Promise<boolean> {
+  try {
+    await tx('account', 'readwrite', (s) => s.put(a, 'me'));
+    const back = await tx<StoredAccount>('account', 'readonly', (s) => s.get('me'));
+    return back?.userId === a.userId;
+  } catch {
+    return false;
+  }
 }
 export async function loadAccount(): Promise<StoredAccount | null> {
   try { return (await tx<StoredAccount>('account', 'readonly', (s) => s.get('me'))) ?? null; }

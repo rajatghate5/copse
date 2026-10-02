@@ -34,6 +34,7 @@ export function ChatScreen() {
   const activeId = useChatStore((s) => s.activeId);
   const setActive = useChatStore((s) => s.setActive);
   const me = useAuth((s) => s.me!);
+  const storageBlocked = useAuth((s) => s.storageBlocked);
 
   const [view, setView] = useState<'list' | 'thread'>('list');
   const [showNew, setShowNew] = useState(false);
@@ -105,6 +106,14 @@ export function ChatScreen() {
           </div>
         </div>
       </div>
+
+      {storageBlocked && (
+        <div className="store-warn">
+          This browser won't keep your account on this device, so a reload will ask for your
+          username and passphrase rather than just the passphrase. Private windows and blocked
+          site data do this.
+        </div>
+      )}
 
       {showNew && <NewConversationDialog onClose={() => setShowNew(false)} />}
       {showProfile && <ProfilePanel onClose={() => setShowProfile(false)} />}
