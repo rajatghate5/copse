@@ -206,8 +206,10 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .pane-art { flex: 1 1 500px; position: relative; overflow: hidden; background: #04100a; color: #e4ede7; display: flex; flex-direction: column; }
 .pane-form { flex: 1 1 500px; display: flex; flex-direction: column; background: var(--bg); min-height: 100vh; }
 
-/* The art owns the top 80%; the copy is pinned to the bottom edge. */
-.lane { position: absolute; left: 0; right: 0; top: 0; height: 80%; overflow: hidden; }
+/* The band runs from under the wordmark down to the top of the scrim, so a
+   bubble never drifts behind "Copse" and never under the copy. Stated as
+   top/bottom rather than a height, so it keeps every pixel in between. */
+.lane { position: absolute; left: 0; right: 0; top: 104px; bottom: 26%; overflow: hidden; }
 /* A pool of light, so a bubble never sits on flat near-black. */
 .lane::before { content: ""; position: absolute; left: -12%; right: -12%; top: -16%; bottom: -14%; background: radial-gradient(62% 58% at 44% 42%, rgba(76, 154, 116, .22), transparent 74%); }
 /* Reaches only as high as the copy, so it never dims the art above it. */

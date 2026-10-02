@@ -51,10 +51,14 @@ interface Bubble {
 
 const TINTS = ['#3f8560', '#4c9a74', '#58a37f', '#2f6b4f', '#b8781f'];
 
-// Spread across the band, two to a row, so neither edge of the panel is empty.
+/**
+ * Spread across the band, two to a row, so neither edge is empty. Tops are
+ * percentages of the band — which now starts below the wordmark — so they
+ * redistribute by themselves at any panel height.
+ */
 const SPOTS = [
-  ['6%', '4%'], ['7%', '48%'], ['18%', '24%'], ['19%', '62%'], ['30%', '2%'],
-  ['31%', '44%'], ['43%', '20%'], ['44%', '58%'], ['55%', '6%'], ['56%', '46%'],
+  ['2%', '4%'], ['3%', '48%'], ['19%', '24%'], ['20%', '62%'], ['36%', '2%'],
+  ['37%', '44%'], ['53%', '20%'], ['54%', '58%'], ['70%', '6%'], ['71%', '46%'],
 ] as const;
 
 const BUBBLES: Bubble[] = (() => {
