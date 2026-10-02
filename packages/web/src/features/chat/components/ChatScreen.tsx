@@ -107,6 +107,7 @@ export function ChatScreen() {
       </div>
 
       {showNew && <NewConversationDialog onClose={() => setShowNew(false)} />}
+      {showProfile && <ProfilePanel onClose={() => setShowProfile(false)} />}
       {showSafety && otherUser && <SafetyNumberSheet other={otherUser} onClose={() => setShowSafety(false)} />}
     </div>
   );
