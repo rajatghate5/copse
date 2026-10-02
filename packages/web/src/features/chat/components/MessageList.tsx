@@ -11,13 +11,21 @@
  * whole difficulty here. A row's height is unknown until it has rendered, so
  * opening a thread scrolls to the end using 56px guesses, the real heights land,
  * the content grows underneath, and the end is suddenly far below the viewport -
- * which, measured naively, looks exactly like someone who scrolled up to read.
- * It would then stop following and leave the thread parked in old messages. So
- * the pin is dropped only by a scroll event the browser attributes to the user
- * (`scrollUpdateWasRequested === false`), and every measurement that moves the
- * end re-follows it while pinned. The component is also keyed by conversation
- * where it's used, so the height cache and the pin start clean per thread rather
- * than aiming the new thread with the old one's measurements.
+ * which, measured by position, looks exactly like someone who scrolled up to
+ * read. Treat it as that and the list unpins itself and sits in old messages.
+ *
+ * Position cannot tell the two apart, and neither can react-window's
+ * `scrollUpdateWasRequested`: that flag marks the render which asked for a
+ * scroll, while the native scroll event it then causes arrives with the flag
+ * false, indistinguishable from a wheel. So the pin is dropped on evidence the
+ * reader actually did something - a wheel, a drag, a touch, a key - and a scroll
+ * with no such input behind it is taken for what it is, the layout settling.
+ * Every measurement that moves the end re-follows it while pinned, so a thread
+ * lands on the newest message however wrong the first guess was.
+ *
+ * The component is keyed by conversation where it's used, so the height cache
+ * and the pin start clean per thread rather than aiming the new thread with the
+ * old one's measurements.
  */
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -116,6 +124,31 @@ export function MessageList({ messages, isGroup, nameOf, typingNames }: Props) {
     if (height > 0 && pinned.current) toEnd();
   }, [height]);
 
+  /**
+   * Evidence that a scroll is the reader's. A wheel or a touch is a moment, so
+   * it counts for a short window afterwards (the scroll events it causes arrive
+   * over the following frames); a pointer held on the scrollbar counts for as
+   * long as it is held, which a window-level mouseup ends even if released off
+   * the element.
+   */
+  const heldDown = useRef(false);
+  const intentUntil = useRef(0);
+  // A flick keeps scrolling long after the finger is gone, so a touch counts for
+  // longer than a wheel tick - those momentum frames are still the reader's.
+  const noteIntent = (ms = 700) => { intentUntil.current = Math.max(intentUntil.current, performance.now() + ms); };
+  const readerScrolled = () => heldDown.current || performance.now() < intentUntil.current;
+
+  useEffect(() => {
+    const mouseUp = () => { heldDown.current = false; noteIntent(); };
+    const touchEnd = () => { heldDown.current = false; noteIntent(2000); };
+    window.addEventListener('mouseup', mouseUp);
+    window.addEventListener('touchend', touchEnd);
+    return () => {
+      window.removeEventListener('mouseup', mouseUp);
+      window.removeEventListener('touchend', touchEnd);
+    };
+  }, []);
+
   const Row = ({ index, style }: ListChildComponentProps) => {
     const row = rows[index]!;
     const rowRef = useRef<HTMLDivElement>(null);
@@ -144,7 +177,18 @@ export function MessageList({ messages, isGroup, nameOf, typingNames }: Props) {
   };
 
   return (
-    <div className="stream" ref={ref} style={{ padding: 0 }}>
+    // The input listeners sit on the wrapper, so they catch everything inside
+    // the virtualised list - including a drag of its scrollbar - without the
+    // list having to forward them.
+    <div
+      className="stream"
+      ref={ref}
+      style={{ padding: 0 }}
+      onWheel={() => noteIntent()}
+      onTouchMove={() => noteIntent(2000)}
+      onKeyDown={() => noteIntent()}
+      onMouseDown={() => { heldDown.current = true; noteIntent(); }}
+    >
       {width > 0 && height > 0 && (
         <VariableSizeList
           ref={listRef}
@@ -155,9 +199,10 @@ export function MessageList({ messages, isGroup, nameOf, typingNames }: Props) {
           itemSize={sizeOf}
           itemKey={(i) => rows[i]!.key}
           onScroll={({ scrollUpdateWasRequested }) => {
-            // Our own scrollToItem calls report `true`; only the reader's own
-            // scrolling decides whether to keep following the newest message.
-            if (scrollUpdateWasRequested) return;
+            // The flagged one is our own request; the unflagged one may still be
+            // its consequence, so position only means something when the reader
+            // has just done something to cause it.
+            if (scrollUpdateWasRequested || !readerScrolled()) return;
             const el = outerRef.current;
             if (!el) return;
             pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
