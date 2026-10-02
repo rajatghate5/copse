@@ -27,6 +27,7 @@ import * as api from '@/lib/api.ts';
 import { KeyManager } from '@/features/chat/crypto/keyManager.ts';
 import { useRoomStore } from '@/features/rooms/roomStore.ts';
 import { clearAccount, loadAccount, saveAccount, wipe, type StoredAccount } from '@/lib/idb.ts';
+import { arm, clearAll, clearBlob, resume, watchIdle } from '@/features/auth/resume.ts';
 
 export type AuthStatus = 'loading' | 'signedOut' | 'locked' | 'ready';
 
@@ -58,6 +59,8 @@ interface AuthState {
   signInOnNewDevice: (args: { username: string; passphrase: string }) => Promise<void>;
   /** Replace the identity summary with the server's authoritative one (admin flag). */
   setMe: (me: UserSummary) => void;
+  /** Drop the keys from memory and ask for the passphrase again. */
+  lock: () => void;
   signOut: () => Promise<void>;
   clearError: () => void;
 }
@@ -75,6 +78,9 @@ async function establishSession(username: string, identity: Identity): Promise<s
   const { userId } = await api.login({ username, challenge, signature });
   return userId;
 }
+
+/** Disposer for the idle watcher, so `ready` never stacks two of them. */
+let stopIdle: (() => void) | null = null;
 
 async function ready(
   set: (p: Partial<AuthState>) => void,
@@ -97,6 +103,9 @@ async function ready(
     isAdmin,
   };
   set({ status: 'ready', account, identity, km, me, busy: false, error: null });
+
+  stopIdle?.();
+  stopIdle = watchIdle(() => useAuth.getState().lock());
 }
 
 export const useAuth = create<AuthState>((set, get) => ({
@@ -111,7 +120,22 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   async boot() {
     const account = await loadAccount();
-    set({ account, status: account ? 'locked' : 'signedOut' });
+    if (!account) return set({ account: null, status: 'signedOut' });
+
+    // This tab may still be allowed to skip the passphrase.
+    const mnemonic = await resume();
+    if (mnemonic) {
+      try {
+        const identity = identityFromMnemonic(mnemonic);
+        await establishSession(account.username, identity);
+        return await ready(set, account, identity);
+      } catch {
+        // Offline, or the server forgot the session: without one the socket
+        // would only 401 in a loop, so ask for the passphrase instead.
+        clearBlob();
+      }
+    }
+    set({ account, status: 'locked' });
   },
 
   async register({ joinCode, bootstrap, roomName, username, displayName, passphrase }) {
@@ -135,6 +159,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       // Enter the room this account just joined or created (held in memory only).
       useRoomStore.getState().setCurrent(roomId);
       await establishSession(username, identity);
+      await arm(mnemonic);
       await ready(set, account, identity, Boolean(bootstrap));
     } catch (e) {
       set({ busy: false, error: (e as Error).message || 'could not create the account' });
@@ -153,6 +178,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       });
       const identity = identityFromMnemonic(mnemonic);
       await establishSession(account.username, identity);
+      await arm(mnemonic);
       await ready(set, account, identity);
     } catch {
       // A wrong passphrase makes the AES-GCM open throw - the one honest signal.
@@ -172,6 +198,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       });
       const identity = identityFromMnemonic(mnemonic);
       const userId = await establishSession(username, identity);
+      await arm(mnemonic);
       const account: StoredAccount = { userId, username, displayName: username, vault: blob };
       set({ storageBlocked: !(await saveAccount(account)) });
       await ready(set, account, identity);
@@ -187,8 +214,18 @@ export const useAuth = create<AuthState>((set, get) => ({
     set({ me });
   },
 
+  lock() {
+    clearBlob();
+    stopIdle?.();
+    stopIdle = null;
+    set({ status: 'locked', identity: null, km: null, me: null, error: null });
+  },
+
   async signOut() {
     try { await api.logout(); } catch { /* best effort */ }
+    stopIdle?.();
+    stopIdle = null;
+    await clearAll();
     await wipe();
     await clearAccount();
     set({ status: 'signedOut', account: null, identity: null, km: null, me: null, error: null });

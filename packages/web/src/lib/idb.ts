@@ -12,13 +12,15 @@
  *   - outbox    messages queued while offline, flushed on reconnect. This is the
  *               reliability guarantee: a sent message is not lost if the socket
  *               was down.
+ *   - resume    one non-extractable key, which only decrypts a blob that lives
+ *               in sessionStorage. Useless on its own; see features/auth/resume.
  *
  * A tiny promise wrapper over the raw API - no dependency, and every call is
  * guarded so a private window or blocked storage degrades instead of throwing.
  */
 
 const DB_NAME = 'copse';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export interface StoredAccount {
   userId: string;
@@ -50,6 +52,9 @@ function open(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains('account')) db.createObjectStore('account');
       if (!db.objectStoreNames.contains('convKeys')) db.createObjectStore('convKeys');
       if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'clientId' });
+      // v2: holds one non-extractable CryptoKey, for staying unlocked across a
+      // reload. The key's bytes are unreadable even to this code.
+      if (!db.objectStoreNames.contains('resume')) db.createObjectStore('resume');
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -147,6 +152,22 @@ export async function loadAccount(): Promise<StoredAccount | null> {
   return fallback;
 }
 
+/**
+ * The resume key: a non-extractable AES-GCM key. Structured-clone puts it in
+ * IndexedDB without ever exposing its bytes, so code can encrypt and decrypt
+ * with it but cannot read it out or copy it anywhere.
+ */
+export async function saveResumeKey(key: CryptoKey): Promise<void> {
+  try { await tx('resume', 'readwrite', (s) => s.put(key, 'key')); } catch { /* no resume, then */ }
+}
+export async function loadResumeKey(): Promise<CryptoKey | null> {
+  try { return (await tx<CryptoKey>('resume', 'readonly', (s) => s.get('key'))) ?? null; }
+  catch { return null; }
+}
+export async function clearResumeKey(): Promise<void> {
+  try { await tx('resume', 'readwrite', (s) => s.clear()); } catch { /* ignore */ }
+}
+
 export async function clearAccount(): Promise<void> {
   try { await tx('account', 'readwrite', (s) => s.delete('me')); } catch { /* ignore */ }
   localClear();
@@ -188,7 +209,7 @@ export async function pending(): Promise<OutboxItem[]> {
 }
 
 export async function wipe(): Promise<void> {
-  for (const store of ['account', 'convKeys', 'outbox']) {
+  for (const store of ['account', 'convKeys', 'outbox', 'resume']) {
     try { await tx(store, 'readwrite', (s) => s.clear()); } catch { /* ignore */ }
   }
   // The account's second home. Missing this would resurrect it on next load.
