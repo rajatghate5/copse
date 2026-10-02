@@ -5,7 +5,7 @@
    exactly as the prototype established. Components read tokens only. */
 :root {
   --bg:#eef1ea; --panel:#fffefb; --panel-2:#f6f8f3; --ink:#1c2a21; --muted:#5d6b62; --faint:#8a978d;
-  --line:#e2e7e1; --accent:#2f6b4f; --accent-ink:#22543d; --accent-soft:#e4efe6; --warm:#b8781f; --plum:#7d5a8c; --online:#2fa36a;
+  --line:#e2e7e1; --accent:#2f6b4f; --accent-ink:#22543d; --accent-soft:#e4efe6; --warm:#b8781f; --plum:#7d5a8c; --online:#2fa36a; --scroll:#c4cec7; --scroll-hover:#a8b5ac;
   --them:#eef2ea; --them-ink:#26332b; --me:#2f6b4f; --me-ink:#f2f8f3;
   --exp:#8a7a4a; --exp-bg:#f0ead9; --danger:#b4442f;
   --shadow:0 1px 2px rgba(20,40,30,.06), 0 12px 34px rgba(20,40,30,.10);
@@ -15,13 +15,13 @@
 }
 :root:not([data-theme="light"]) { @media (prefers-color-scheme: dark) {
   --bg:#0a0f0c; --panel:#141c17; --panel-2:#101713; --ink:#e4ede7; --muted:#9fb0a5; --faint:#7f9186;
-  --line:#233029; --accent:#4c9a74; --accent-ink:#7fd6a8; --accent-soft:#153025; --warm:#c99a63; --plum:#b98fe0; --online:#49c98c;
+  --line:#233029; --accent:#4c9a74; --accent-ink:#7fd6a8; --accent-soft:#153025; --warm:#c99a63; --plum:#b98fe0; --online:#49c98c; --scroll:#2b3a32; --scroll-hover:#3c5046;
   --them:#18211c; --them-ink:#d4e0d8; --me:#3c7d5d; --me-ink:#f0f8f2; --exp:#c2ad76; --exp-bg:#241f12; --danger:#e07a63;
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 14px 40px rgba(0,0,0,.5);
 }}
 :root[data-theme="dark"] {
   --bg:#0a0f0c; --panel:#141c17; --panel-2:#101713; --ink:#e4ede7; --muted:#9fb0a5; --faint:#7f9186;
-  --line:#233029; --accent:#4c9a74; --accent-ink:#7fd6a8; --accent-soft:#153025; --warm:#c99a63; --plum:#b98fe0; --online:#49c98c;
+  --line:#233029; --accent:#4c9a74; --accent-ink:#7fd6a8; --accent-soft:#153025; --warm:#c99a63; --plum:#b98fe0; --online:#49c98c; --scroll:#2b3a32; --scroll-hover:#3c5046;
   --them:#18211c; --them-ink:#d4e0d8; --me:#3c7d5d; --me-ink:#f0f8f2; --exp:#c2ad76; --exp-bg:#241f12; --danger:#e07a63;
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 14px 40px rgba(0,0,0,.5);
 }
@@ -345,3 +345,15 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .pm-knob { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .16s ease; }
 .pm-switch.on .pm-knob { transform: translateX(18px); }
 @media (prefers-reduced-motion: reduce) { .pm-switch, .pm-knob { transition: none; } }
+
+/* ---------- scrollbars ----------
+   Four areas scroll. Left alone they take the OS default, which on the dark
+   theme is a pale bar sitting on a near-black panel. Tokens, so the bar follows
+   the theme like everything else; `scrollbar-color` covers Firefox and the
+   pseudo-elements cover WebKit. The transparent border plus padding-box clip is
+   what insets the thumb instead of letting it touch the edge. */
+.rlist, .stream, .member-pick, .pm-body { scrollbar-width: thin; scrollbar-color: var(--scroll) transparent; }
+.rlist::-webkit-scrollbar, .stream::-webkit-scrollbar, .member-pick::-webkit-scrollbar, .pm-body::-webkit-scrollbar { width: 10px; height: 10px; }
+.rlist::-webkit-scrollbar-track, .stream::-webkit-scrollbar-track, .member-pick::-webkit-scrollbar-track, .pm-body::-webkit-scrollbar-track { background: transparent; }
+.rlist::-webkit-scrollbar-thumb, .stream::-webkit-scrollbar-thumb, .member-pick::-webkit-scrollbar-thumb, .pm-body::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+.rlist::-webkit-scrollbar-thumb:hover, .stream::-webkit-scrollbar-thumb:hover, .member-pick::-webkit-scrollbar-thumb:hover, .pm-body::-webkit-scrollbar-thumb:hover { background: var(--scroll-hover); border: 3px solid transparent; background-clip: padding-box; }
