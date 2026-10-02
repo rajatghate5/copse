@@ -6,8 +6,9 @@
 
 import { useChatStore } from '@/features/chat/store/chatStore.ts';
 import { useAuth } from '@/features/auth/authStore.ts';
-import { conversationName, previewOf } from '@/features/chat/selectors.ts';
-import { initials, messageTime } from '@/lib/format.ts';
+import { conversationName, otherMemberIds, previewOf } from '@/features/chat/selectors.ts';
+import { messageTime } from '@/lib/format.ts';
+import { Avatar } from '@/features/chat/components/Avatar.tsx';
 import { Plus } from '@/assets/svgs/plus/index.tsx';
 
 interface Props {
@@ -48,7 +49,7 @@ export function ConversationList({ onSelect, onNew }: Props) {
               className={`ritem ${conv.id === activeId ? 'active' : ''}`}
               onClick={() => onSelect(conv.id)}
             >
-              <span className="av">{initials(name)}</span>
+              <Avatar name={name} userIds={otherMemberIds(conv, meId)} />
               <span className="ri-main">
                 <span className="ri-name">{name}</span>
                 <span className="ri-prev">{previewOf(msgs)}</span>

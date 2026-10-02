@@ -225,6 +225,13 @@ export type ServerMessage =
   /** A page of history, oldest-first, in response to a `history` request. */
   | { t: 'history'; conversationId: string; messages: WireMessage[]; done: boolean }
   | { t: 'typing'; state: TypingState }
+  /**
+   * Who in the current room has a live socket on it, as a whole list rather than
+   * a delta - it is at most ROOM_MAX_MEMBERS long, and a full list cannot drift
+   * out of sync the way add/remove pairs can. Derived from the socket registry
+   * on the server; a client never asserts its own presence.
+   */
+  | { t: 'presence'; userIds: string[] }
   | { t: 'error'; code: ErrorCode; message: string };
 
 export type ErrorCode =

@@ -11,7 +11,7 @@ import { useSocket } from '@/features/chat/hooks/useSocket.ts';
 import { useChat } from '@/features/chat/hooks/useChat.ts';
 import { useTypingIndicator } from '@/features/chat/hooks/useTypingIndicator.ts';
 import { conversationName, conversationSubtitle, otherMemberIds } from '@/features/chat/selectors.ts';
-import { initials } from '@/lib/format.ts';
+import { Avatar } from '@/features/chat/components/Avatar.tsx';
 import { MessageList } from '@/features/chat/components/MessageList.tsx';
 import { Composer } from '@/features/chat/components/Composer.tsx';
 import { ConversationList } from '@/features/chat/components/ConversationList.tsx';
@@ -78,7 +78,7 @@ export function ChatScreen() {
               <>
                 <div className="thread-head">
                   <button className="back" aria-label="Back" onClick={() => setView('list')}><ChevronLeft /></button>
-                  <span className="av sm">{initials(title)}</span>
+                  <Avatar name={title} size="sm" userIds={otherMemberIds(active, me.id)} />
                   <span>
                     <span className="th-name">{title}</span>
                     <br />

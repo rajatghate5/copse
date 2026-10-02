@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { useChatStore } from '@/features/chat/store/chatStore.ts';
 import { useAuth } from '@/features/auth/authStore.ts';
 import { createConversation } from '@/features/chat/engine.ts';
-import { initials } from '@/lib/format.ts';
+import { Avatar } from '@/features/chat/components/Avatar.tsx';
 import { Check } from '@/assets/svgs/check/index.tsx';
 
 export function NewConversationDialog({ onClose }: { onClose: () => void }) {
@@ -41,7 +41,7 @@ export function NewConversationDialog({ onClose }: { onClose: () => void }) {
           {others.length === 0 && <div className="empty">No one else has joined yet.</div>}
           {others.map((u) => (
             <button key={u.id} className={`member ${picked.has(u.id) ? 'on' : ''}`} onClick={() => toggle(u.id)}>
-              <span className="av sm">{initials(u.displayName)}</span>
+              <Avatar name={u.displayName} size="sm" userIds={[u.id]} />
               <span className="mname">{u.displayName} <span style={{ color: 'var(--faint)', fontWeight: 400 }}>@{u.username}</span></span>
               {picked.has(u.id) && <Check className="mcheck" />}
             </button>

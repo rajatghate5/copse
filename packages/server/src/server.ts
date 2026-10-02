@@ -270,6 +270,17 @@ export function createServer(opts: ServerOptions): CopseServer {
     ws.send(JSON.stringify(msg));
   };
 
+  /**
+   * Tell a room who is on it. Derived from the socket registry, never from a
+   * client: the server owns this state, as it does every other.
+   */
+  async function broadcastPresence(roomId: string): Promise<void> {
+    try {
+      const members = await store.listUsersInRoom(roomId);
+      hub.sendMany(members.map((m) => m.id), roomId, { t: 'presence', userIds: hub.onlineIn(roomId) });
+    } catch { /* a presence frame is never worth failing a socket over */ }
+  }
+
   const rateLimited = (ws: ServerWebSocket<SocketData>): boolean => {
     const now = Date.now();
     const r = ws.data.rate;
@@ -412,6 +423,9 @@ export function createServer(opts: ServerOptions): CopseServer {
           store.listConversationsForUser(me, roomId),
         ]);
         if (you && room) send(ws, { t: 'ready', you, room, rooms, users, conversations });
+        // After `ready`, so this socket already knows the room's directory and
+        // can map the ids it is about to receive.
+        void broadcastPresence(roomId);
         // Deliver this user's wrapped conversation keys for this room, so a fresh
         // session or a new device can decrypt history. Each blob is sealed to them.
         for (const conv of conversations) {
@@ -434,6 +448,8 @@ export function createServer(opts: ServerOptions): CopseServer {
       },
       close(ws) {
         hub.remove(ws);
+        // Remove first, so the list we send no longer counts this socket.
+        void broadcastPresence(ws.data.roomId);
       },
     },
   };

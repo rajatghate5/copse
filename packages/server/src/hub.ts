@@ -51,6 +51,24 @@ export class Hub {
     for (const ws of set) if (ws.data.roomId === roomId) ws.send(payload);
   }
 
+  /**
+   * Who has at least one live socket viewing `roomId`. This is the only source
+   * of presence: it is the socket registry itself, so it cannot disagree with
+   * reality, and a client has no way to claim to be online.
+   */
+  onlineIn(roomId: string): string[] {
+    const ids: string[] = [];
+    for (const [userId, set] of this.sockets) {
+      for (const ws of set) {
+        if (ws.data.roomId === roomId) {
+          ids.push(userId);
+          break;
+        }
+      }
+    }
+    return ids;
+  }
+
   /** Deliver to several users' sockets that are viewing `roomId`. */
   sendMany(userIds: Iterable<string>, roomId: string, msg: ServerMessage): void {
     const payload = JSON.stringify(msg);

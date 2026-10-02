@@ -36,6 +36,8 @@ interface ChatState {
   conversations: Record<string, ConversationSummary>;
   messages: Record<string, ChatMessage[]>;
   typing: Record<string, string[]>; // conversationId -> userIds typing
+  /** Room members with a live socket, as the server last reported them. */
+  online: string[];
   activeId: string | null;
 
   setConnection: (c: Connection) => void;
@@ -47,6 +49,7 @@ interface ChatState {
   reconcile: (echo: WireMessage, text: string) => void;
   prependHistory: (conversationId: string, msgs: ChatMessage[]) => void;
   setTyping: (conversationId: string, userId: string, typing: boolean) => void;
+  setOnline: (userIds: string[]) => void;
   setActive: (id: string | null) => void;
   reset: () => void;
 }
@@ -64,9 +67,12 @@ export const useChatStore = create<ChatState>((set) => ({
   conversations: {},
   messages: {},
   typing: {},
+  online: [],
   activeId: null,
 
   setConnection: (connection) => set({ connection }),
+  // The server sends the whole list, so replacing it wholesale is the point.
+  setOnline: (online) => set({ online }),
 
   applyReady: (users, conversations) =>
     set({
@@ -123,5 +129,5 @@ export const useChatStore = create<ChatState>((set) => ({
 
   setActive: (activeId) => set({ activeId }),
 
-  reset: () => set({ connection: 'connecting', users: {}, conversations: {}, messages: {}, typing: {}, activeId: null }),
+  reset: () => set({ connection: 'connecting', users: {}, conversations: {}, messages: {}, typing: {}, online: [], activeId: null }),
 }));

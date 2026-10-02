@@ -114,6 +114,10 @@ async function handleFrame(msg: ServerMessage): Promise<void> {
       store.setTyping(msg.state.conversationId, msg.state.userId, msg.state.typing);
       return;
 
+    case 'presence':
+      store.setOnline(msg.userIds);
+      return;
+
     case 'error':
       // Non-fatal; the UI shows connection state, and illegal actions are rare.
       console.warn('[copse] server error:', msg.code, msg.message);

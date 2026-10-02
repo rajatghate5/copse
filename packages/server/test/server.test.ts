@@ -142,6 +142,44 @@ function runSuite(name: string, makeStore: () => Store) {
     const servers: AnyServer[] = [];
     afterAll(() => servers.forEach((s) => s.stop(true)));
 
+    test('reports presence from live sockets, and withdraws it on disconnect', async () => {
+      const h = await startServer(makeStore());
+      servers.push(h.server);
+      const alice = identityFromMnemonic(generateMnemonicPhrase());
+      const bob = identityFromMnemonic(generateMnemonicPhrase());
+      const { userId: aliceId, roomId } = await bootstrapRoom(h.base, 'alice', alice);
+      const aliceCookie = await login(h.base, 'alice', alice);
+      const code = await firstRoomCode(h.base, aliceCookie);
+      const { userId: bobId } = await joinRoom(h.base, 'bob', bob, code);
+      const bobCookie = await login(h.base, 'bob', bob);
+
+      const a = openSocket(h.base, aliceCookie, roomId);
+      await waitFor(() => a.frames.find((f) => f.t === 'ready'));
+      // Alice alone: she is the only one present.
+      const alone = (await waitFor(() =>
+        a.frames.find((f): f is Extract<ServerMessage, { t: 'presence' }> => f.t === 'presence'),
+      ));
+      expect(alone.userIds).toEqual([aliceId]);
+
+      const b = openSocket(h.base, bobCookie, roomId);
+      await waitFor(() => b.frames.find((f) => f.t === 'ready'));
+      // Bob's arrival is announced to Alice, not just to Bob.
+      const both = await waitFor(() => {
+        const f = a.frames.filter((x): x is Extract<ServerMessage, { t: 'presence' }> => x.t === 'presence').at(-1);
+        return f && f.userIds.length === 2 ? f : undefined;
+      });
+      expect([...both.userIds].sort()).toEqual([aliceId, bobId].sort());
+
+      b.ws.close();
+      // And withdrawn when he goes: presence is the socket registry, not a flag.
+      const after = await waitFor(() => {
+        const f = a.frames.filter((x): x is Extract<ServerMessage, { t: 'presence' }> => x.t === 'presence').at(-1);
+        return f && f.userIds.length === 1 ? f : undefined;
+      });
+      expect(after.userIds).toEqual([aliceId]);
+      a.ws.close();
+    });
+
     test('rejects a socket with no session', async () => {
       const h = await startServer(makeStore());
       servers.push(h.server);

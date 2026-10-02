@@ -5,7 +5,7 @@
    exactly as the prototype established. Components read tokens only. */
 :root {
   --bg:#eef1ea; --panel:#fffefb; --panel-2:#f6f8f3; --ink:#1c2a21; --muted:#5d6b62; --faint:#8a978d;
-  --line:#e2e7e1; --accent:#2f6b4f; --accent-ink:#22543d; --accent-soft:#e4efe6; --warm:#b8781f; --plum:#7d5a8c;
+  --line:#e2e7e1; --accent:#2f6b4f; --accent-ink:#22543d; --accent-soft:#e4efe6; --warm:#b8781f; --plum:#7d5a8c; --online:#2fa36a;
   --them:#eef2ea; --them-ink:#26332b; --me:#2f6b4f; --me-ink:#f2f8f3;
   --exp:#8a7a4a; --exp-bg:#f0ead9; --danger:#b4442f;
   --shadow:0 1px 2px rgba(20,40,30,.06), 0 12px 34px rgba(20,40,30,.10);
@@ -15,13 +15,13 @@
 }
 :root:not([data-theme="light"]) { @media (prefers-color-scheme: dark) {
   --bg:#0a0f0c; --panel:#141c17; --panel-2:#101713; --ink:#e4ede7; --muted:#9fb0a5; --faint:#7f9186;
-  --line:#233029; --accent:#4c9a74; --accent-ink:#7fd6a8; --accent-soft:#153025; --warm:#c99a63; --plum:#b98fe0;
+  --line:#233029; --accent:#4c9a74; --accent-ink:#7fd6a8; --accent-soft:#153025; --warm:#c99a63; --plum:#b98fe0; --online:#49c98c;
   --them:#18211c; --them-ink:#d4e0d8; --me:#3c7d5d; --me-ink:#f0f8f2; --exp:#c2ad76; --exp-bg:#241f12; --danger:#e07a63;
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 14px 40px rgba(0,0,0,.5);
 }}
 :root[data-theme="dark"] {
   --bg:#0a0f0c; --panel:#141c17; --panel-2:#101713; --ink:#e4ede7; --muted:#9fb0a5; --faint:#7f9186;
-  --line:#233029; --accent:#4c9a74; --accent-ink:#7fd6a8; --accent-soft:#153025; --warm:#c99a63; --plum:#b98fe0;
+  --line:#233029; --accent:#4c9a74; --accent-ink:#7fd6a8; --accent-soft:#153025; --warm:#c99a63; --plum:#b98fe0; --online:#49c98c;
   --them:#18211c; --them-ink:#d4e0d8; --me:#3c7d5d; --me-ink:#f0f8f2; --exp:#c2ad76; --exp-bg:#241f12; --danger:#e07a63;
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 14px 40px rgba(0,0,0,.5);
 }
@@ -264,3 +264,12 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .lock-head h1 { margin: 0 0 3px; font-size: 32px; }
 .lock-user { font-family: var(--mono); font-size: 12px; color: var(--faint); }
 .lock-foot { margin: 26px 0 0; font-family: var(--mono); font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--faint); }
+
+/* ---------- presence ----------
+   A dot on the avatar, meaning "has a live socket on this room". The ring is
+   the panel colour, not white, so it reads as a cut-out in both themes. */
+.av-wrap { position: relative; flex: none; display: inline-grid; }
+.av-dot { position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: var(--online); box-shadow: 0 0 0 2px var(--panel); }
+.av-wrap .av.sm + .av-dot { width: 11px; height: 11px; }
+/* On a selected row the ring has to match that row's fill, or it looks notched. */
+.ritem.active .av-dot { box-shadow: 0 0 0 2px var(--accent-soft); }
