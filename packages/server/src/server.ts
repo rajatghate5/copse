@@ -42,7 +42,7 @@ import { verifyChallenge, base64ToBytes } from '@copse/crypto';
 import { Sessions, SESSION_COOKIE, readCookie } from './auth.ts';
 import { Hub, type SocketData } from './hub.ts';
 import { uniqueInviteCode } from './rooms.ts';
-import type { Store } from './store.ts';
+import { HISTORY_PAGE, type Store } from './store.ts';
 
 /** Ported from No Mercy: a coarse per-socket flood guard. */
 const RATE_LIMIT_MSGS = 60;
@@ -357,7 +357,18 @@ export function createServer(opts: ServerOptions): CopseServer {
           ciphertext,
           signature,
         });
-        hub.sendMany(await store.memberIds(msg.conversationId), room, { t: 'message', message: stored });
+        const memberIds = await store.memberIds(msg.conversationId);
+        hub.sendMany(memberIds, room, { t: 'message', message: stored });
+
+        // Delivered means another member's socket was there to take it. Derived
+        // from the registry at fan-out, so it is a fact about this send and not
+        // something a client can claim.
+        const live = new Set(hub.onlineIn(room));
+        if (memberIds.some((id) => id !== me && live.has(id))) {
+          const at = Date.now();
+          await store.markDelivered([stored.id], at);
+          hub.send(me, room, { t: 'receipt', messageIds: [stored.id], kind: 'delivered', at });
+        }
         return;
       }
 
@@ -372,6 +383,26 @@ export function createServer(opts: ServerOptions): CopseServer {
           messages,
           done: messages.length === 0,
         });
+      }
+
+      case 'read': {
+        if (!Array.isArray(msg.messageIds) || msg.messageIds.length === 0) return;
+        if (msg.messageIds.length > HISTORY_PAGE) return;
+        if (!(await store.isMember(msg.conversationId, me))) return;
+        // Only this conversation's messages, and never the reader's own: you do
+        // not get to mark your own message read.
+        const page = await store.messagesByIds(msg.messageIds);
+        const theirs = page.filter((m) => m.conversationId === msg.conversationId && m.senderId !== me);
+        if (theirs.length === 0) return;
+        const at = Date.now();
+        await store.markRead(theirs.map((m) => m.id), at);
+        // One frame per sender, carrying only that sender's own messages.
+        const bySender = new Map<string, string[]>();
+        for (const m of theirs) bySender.set(m.senderId, [...(bySender.get(m.senderId) ?? []), m.id]);
+        for (const [senderId, ids] of bySender) {
+          hub.send(senderId, room, { t: 'receipt', messageIds: ids, kind: 'read', at });
+        }
+        return;
       }
 
       case 'typing': {

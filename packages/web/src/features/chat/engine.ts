@@ -8,10 +8,10 @@
  * through and no stale closures.
  */
 
-import type { ServerMessage, ConversationKind } from '@copse/protocol';
+import type { ServerMessage, ConversationKind, WireMessage } from '@copse/protocol';
 import { useAuth } from '@/features/auth/authStore.ts';
 import { useRoomStore } from '@/features/rooms/roomStore.ts';
-import { useChatStore, type ChatMessage } from '@/features/chat/store/chatStore.ts';
+import { useChatStore, statusOf, type ChatMessage } from '@/features/chat/store/chatStore.ts';
 import { SocketService } from '@/features/chat/services/socket.ts';
 import { dequeue, enqueue, pending } from '@/lib/idb.ts';
 
@@ -118,6 +118,10 @@ async function handleFrame(msg: ServerMessage): Promise<void> {
       store.setOnline(msg.userIds);
       return;
 
+    case 'receipt':
+      store.applyReceipt(msg.messageIds, msg.kind);
+      return;
+
     case 'error':
       // Non-fatal; the UI shows connection state, and illegal actions are rare.
       console.warn('[copse] server error:', msg.code, msg.message);
@@ -126,7 +130,7 @@ async function handleFrame(msg: ServerMessage): Promise<void> {
 }
 
 function toMessage(
-  wire: { id: string; conversationId: string; senderId: string; seq: number; sentAt: number },
+  wire: WireMessage,
   text: string,
   mine: boolean,
 ): ChatMessage {
@@ -138,7 +142,7 @@ function toMessage(
     sentAt: wire.sentAt,
     mine,
     text,
-    status: 'sent',
+    status: statusOf(wire),
   };
 }
 
@@ -213,6 +217,18 @@ async function flushOutbox(): Promise<void> {
 
 /** Debounced typing signal for the active conversation. */
 let typingTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * Report messages this client has displayed. Ids already reported are dropped,
+ * so scrolling a thread does not re-send the same receipt every render.
+ */
+const reported = new Set<string>();
+export function markRead(conversationId: string, messageIds: string[]): void {
+  const fresh = messageIds.filter((id) => !reported.has(id));
+  if (fresh.length === 0) return;
+  for (const id of fresh) reported.add(id);
+  socket.send({ t: 'read', conversationId, messageIds: fresh });
+}
+
 export function signalTyping(conversationId: string): void {
   socket.send({ t: 'typing', conversationId, typing: true });
   if (typingTimer) clearTimeout(typingTimer);

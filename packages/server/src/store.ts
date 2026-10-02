@@ -84,7 +84,12 @@ CREATE TABLE IF NOT EXISTS messages (
   iv               TEXT NOT NULL,
   ciphertext       TEXT NOT NULL,
   signature        TEXT NOT NULL,
-  sent_at          INTEGER NOT NULL
+  sent_at          INTEGER NOT NULL,
+  -- First time any OTHER member received / read this message. Null until then.
+  -- One stamp, not one per member: the UI says "someone", and saying more would
+  -- mean storing who read what, which is metadata this server does not need.
+  delivered_at     INTEGER,
+  read_at          INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_room_members_user ON room_members (user_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_room ON conversations (room_id);
@@ -104,6 +109,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages (conversation_id, sent_
 export const MIGRATIONS = [
   "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE conversations ADD COLUMN room_id TEXT NOT NULL DEFAULT ''",
+  'ALTER TABLE messages ADD COLUMN delivered_at INTEGER',
+  'ALTER TABLE messages ADD COLUMN read_at INTEGER',
 ];
 
 export interface NewUser {
@@ -176,6 +183,15 @@ export interface Store {
   wrappedKeyFor(conversationId: string, userId: string): Promise<string | null>;
 
   appendMessage(m: NewMessage): Promise<WireMessage>;
+  /**
+   * Stamp the first delivery / read of these messages. Both are first-wins:
+   * a later call never moves the time, so a reconnecting client replaying its
+   * receipts cannot rewrite history.
+   */
+  markDelivered(messageIds: string[], at: number): Promise<void>;
+  markRead(messageIds: string[], at: number): Promise<void>;
+  /** Look up messages by id, for validating a batch of receipts. */
+  messagesByIds(messageIds: string[]): Promise<WireMessage[]>;
   /** A page of history, newest-first, older than `before` (a message id) if set. */
   history(conversationId: string, before: string | undefined): Promise<WireMessage[]>;
 
@@ -237,6 +253,8 @@ interface MessageRow {
   ciphertext: string;
   signature: string;
   sent_at: number;
+  delivered_at: number | null;
+  read_at: number | null;
 }
 
 export function rowToMessage(r: MessageRow): WireMessage {
@@ -249,5 +267,16 @@ export function rowToMessage(r: MessageRow): WireMessage {
     ciphertext: r.ciphertext,
     signature: r.signature,
     sentAt: r.sent_at,
+    // A row written before these columns existed reads as undefined, not null.
+    deliveredAt: r.delivered_at ?? null,
+    readAt: r.read_at ?? null,
   };
+}
+
+/**
+ * `SET x = COALESCE(x, ?)` is what makes both marks first-wins, and the IN list
+ * is built from placeholders so ids never reach the SQL as text.
+ */
+export function markSql(column: 'delivered_at' | 'read_at', count: number): string {
+  return `UPDATE messages SET ${column} = COALESCE(${column}, ?) WHERE id IN (${Array(count).fill('?').join(', ')})`;
 }

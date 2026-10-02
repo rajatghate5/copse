@@ -24,6 +24,7 @@ import {
   RETENTION_MS,
   SCHEMA,
   newId,
+  markSql,
   rowToMessage,
   rowToRoom,
   rowToUser,
@@ -268,7 +269,27 @@ export class TursoStore implements Store {
       sql: 'INSERT INTO messages (id, conversation_id, sender_id, seq, iv, ciphertext, signature, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       args: [id, m.conversationId, m.senderId, m.seq, m.iv, m.ciphertext, m.signature, sentAt],
     });
-    return { id, ...m, sentAt };
+    return { id, ...m, sentAt, deliveredAt: null, readAt: null };
+  }
+
+  async markDelivered(messageIds: string[], at: number): Promise<void> {
+    if (messageIds.length === 0) return;
+    await this.db.execute({ sql: markSql('delivered_at', messageIds.length), args: [at, ...messageIds] });
+  }
+
+  async markRead(messageIds: string[], at: number): Promise<void> {
+    if (messageIds.length === 0) return;
+    await this.db.execute({ sql: markSql('read_at', messageIds.length), args: [at, ...messageIds] });
+  }
+
+  async messagesByIds(messageIds: string[]): Promise<WireMessage[]> {
+    if (messageIds.length === 0) return [];
+    const holes = Array(messageIds.length).fill('?').join(', ');
+    const r = await this.db.execute({
+      sql: `SELECT * FROM messages WHERE id IN (${holes})`,
+      args: messageIds,
+    });
+    return r.rows.map((row) => rowToMessage(row as any));
   }
 
   async history(conversationId: string, before: string | undefined): Promise<WireMessage[]> {

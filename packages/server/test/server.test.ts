@@ -43,13 +43,15 @@ const BOOTSTRAP = 'test-bootstrap';
 interface Harness {
   base: string;
   server: AnyServer;
+  /** Exposed so a test can assert what was actually persisted, not just the wire. */
+  store: Store;
 }
 
 async function startServer(store: Store): Promise<Harness> {
   await store.init();
   const app = createServer({ store, bootstrap: BOOTSTRAP });
   const server = Bun.serve({ port: 0, fetch: app.fetch, websocket: app.websocket });
-  return { base: `http://localhost:${server.port}`, server };
+  return { base: `http://localhost:${server.port}`, server, store };
 }
 
 // A throwaway vault blob. Its parts only need to look like base64; these tests
@@ -290,6 +292,73 @@ function runSuite(name: string, makeStore: () => Store) {
         { iv: sealed.iv, ciphertext: sealed.ciphertext, signature: sealed.signature },
       );
       expect(bytesToUtf8(opened)).toBe('hello bob');
+
+      a.ws.close();
+      b.ws.close();
+    });
+
+    test('stamps delivered at fan-out and read when the recipient reports it', async () => {
+      const h = await startServer(makeStore());
+      servers.push(h.server);
+
+      const alice = identityFromMnemonic(generateMnemonicPhrase());
+      const bob = identityFromMnemonic(generateMnemonicPhrase());
+      const { userId: aliceId, roomId } = await bootstrapRoom(h.base, 'alice', alice);
+      const aliceCookie = await login(h.base, 'alice', alice);
+      const code = await firstRoomCode(h.base, aliceCookie);
+      const { userId: bobId } = await joinRoom(h.base, 'bob', bob, code);
+      const bobCookie = await login(h.base, 'bob', bob);
+
+      const a = openSocket(h.base, aliceCookie, roomId);
+      const b = openSocket(h.base, bobCookie, roomId);
+      const aReady = (await waitFor(() => a.frames.find((f) => f.t === 'ready'))) as Extract<ServerMessage, { t: 'ready' }>;
+      await waitFor(() => b.frames.find((f) => f.t === 'ready'));
+      const bobSummary = aReady.users.find((u: UserSummary) => u.id === bobId)!;
+
+      const convKey = generateConversationKey();
+      a.ws.send(JSON.stringify({
+        t: 'createConversation', kind: 'direct', titleCiphertext: null,
+        members: [
+          { userId: aliceId, wrappedKey: packWrappedKey(await wrapKeyFor(convKey, alice.encPub)) },
+          { userId: bobId, wrappedKey: packWrappedKey(await wrapKeyFor(convKey, base64ToBytes(bobSummary.keys.encPub))) },
+        ],
+      }));
+      const bConv = (await waitFor(() => b.frames.find((f) => f.t === 'conversation'))) as Extract<ServerMessage, { t: 'conversation' }>;
+      const conversationId = bConv.conversation.id;
+
+      const ctx = { conversationId, senderId: aliceId, seq: 1 };
+      const sealed = await sealMessage(convKey, alice.sigPriv, ctx, utf8ToBytes('hello bob'));
+      a.ws.send(JSON.stringify({
+        t: 'send', conversationId, seq: 1,
+        iv: bytesToBase64(sealed.iv), ciphertext: bytesToBase64(sealed.ciphertext), signature: bytesToBase64(sealed.signature),
+      }));
+
+      // Bob's socket was live at fan-out, so Alice is told it was delivered.
+      const delivered = (await waitFor(() =>
+        a.frames.find((f): f is Extract<ServerMessage, { t: 'receipt' }> => f.t === 'receipt' && f.kind === 'delivered'),
+      ));
+      const bMsg = (await waitFor(() => b.frames.find((f) => f.t === 'message'))) as Extract<ServerMessage, { t: 'message' }>;
+      expect(delivered.messageIds).toEqual([bMsg.message.id]);
+
+      // Reporting it read reaches the sender, and only the sender.
+      b.ws.send(JSON.stringify({ t: 'read', conversationId, messageIds: [bMsg.message.id] }));
+      const read = (await waitFor(() =>
+        a.frames.find((f): f is Extract<ServerMessage, { t: 'receipt' }> => f.t === 'receipt' && f.kind === 'read'),
+      ));
+      expect(read.messageIds).toEqual([bMsg.message.id]);
+      expect(b.frames.some((f) => f.t === 'receipt' && f.kind === 'read')).toBe(false);
+
+      // Both stamps are durable, so a reload does not lose the ticks.
+      const page = await h.store.history(conversationId, undefined);
+      expect(page[0]!.deliveredAt).toBeGreaterThan(0);
+      expect(page[0]!.readAt).toBeGreaterThan(0);
+
+      // And a sender cannot mark their own message read.
+      const before = page[0]!.readAt;
+      a.ws.send(JSON.stringify({ t: 'read', conversationId, messageIds: [bMsg.message.id] }));
+      await new Promise((r) => setTimeout(r, 60));
+      const again = await h.store.history(conversationId, undefined);
+      expect(again[0]!.readAt).toBe(before);
 
       a.ws.close();
       b.ws.close();

@@ -13,7 +13,20 @@
 import { create } from 'zustand';
 import type { ConversationSummary, UserSummary, WireMessage } from '@copse/protocol';
 
-export type Delivery = 'pending' | 'sent';
+export type Delivery = 'pending' | 'sent' | 'delivered' | 'read';
+
+/** Rank, so a late `delivered` can never undo a `read` that already landed. */
+const RANK: Record<Delivery, number> = { pending: 0, sent: 1, delivered: 2, read: 3 };
+
+/**
+ * What the server's stamps mean for a tick. Both are "first by anyone other
+ * than the sender", so this is the status of the message, not of one reader.
+ */
+export function statusOf(wire: { deliveredAt: number | null; readAt: number | null }): Delivery {
+  if (wire.readAt !== null) return 'read';
+  if (wire.deliveredAt !== null) return 'delivered';
+  return 'sent';
+}
 
 export interface ChatMessage {
   id: string;
@@ -50,6 +63,7 @@ interface ChatState {
   prependHistory: (conversationId: string, msgs: ChatMessage[]) => void;
   setTyping: (conversationId: string, userId: string, typing: boolean) => void;
   setOnline: (userIds: string[]) => void;
+  applyReceipt: (messageIds: string[], kind: 'delivered' | 'read') => void;
   setActive: (id: string | null) => void;
   reset: () => void;
 }
@@ -73,6 +87,22 @@ export const useChatStore = create<ChatState>((set) => ({
   setConnection: (connection) => set({ connection }),
   // The server sends the whole list, so replacing it wholesale is the point.
   setOnline: (online) => set({ online }),
+
+  applyReceipt: (messageIds, kind) =>
+    set((s) => {
+      const wanted = new Set(messageIds);
+      const next: typeof s.messages = { ...s.messages };
+      let touched = false;
+      for (const [convId, list] of Object.entries(s.messages)) {
+        if (!list.some((m) => wanted.has(m.id))) continue;
+        next[convId] = list.map((m) =>
+          // Never downgrade: receipts can arrive out of order.
+          wanted.has(m.id) && RANK[kind] > RANK[m.status] ? { ...m, status: kind } : m,
+        );
+        touched = true;
+      }
+      return touched ? { messages: next } : s;
+    }),
 
   applyReady: (users, conversations) =>
     set({
@@ -104,11 +134,11 @@ export const useChatStore = create<ChatState>((set) => ({
         // No optimistic twin (another tab, or a fresh load): just add it.
         return { messages: { ...s.messages, [echo.conversationId]: insertSorted(list, {
           id: echo.id, conversationId: echo.conversationId, senderId: echo.senderId, seq: echo.seq,
-          sentAt: echo.sentAt, mine: true, text, status: 'sent',
+          sentAt: echo.sentAt, mine: true, text, status: statusOf(echo),
         }) } };
       }
       const next = list.slice();
-      next[idx] = { ...next[idx]!, id: echo.id, sentAt: echo.sentAt, status: 'sent' };
+      next[idx] = { ...next[idx]!, id: echo.id, sentAt: echo.sentAt, status: statusOf(echo) };
       return { messages: { ...s.messages, [echo.conversationId]: next } };
     }),
 

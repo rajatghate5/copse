@@ -22,6 +22,7 @@ import {
   RETENTION_MS,
   SCHEMA,
   newId,
+  markSql,
   rowToMessage,
   rowToRoom,
   rowToUser,
@@ -259,7 +260,24 @@ export class SqliteStore implements Store {
         'INSERT INTO messages (id, conversation_id, sender_id, seq, iv, ciphertext, signature, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .run(id, m.conversationId, m.senderId, m.seq, m.iv, m.ciphertext, m.signature, sentAt);
-    return { id, ...m, sentAt };
+    return { id, ...m, sentAt, deliveredAt: null, readAt: null };
+  }
+
+  async markDelivered(messageIds: string[], at: number): Promise<void> {
+    if (messageIds.length === 0) return;
+    this.db.query(markSql('delivered_at', messageIds.length)).run(at, ...messageIds);
+  }
+
+  async markRead(messageIds: string[], at: number): Promise<void> {
+    if (messageIds.length === 0) return;
+    this.db.query(markSql('read_at', messageIds.length)).run(at, ...messageIds);
+  }
+
+  async messagesByIds(messageIds: string[]): Promise<WireMessage[]> {
+    if (messageIds.length === 0) return [];
+    const holes = Array(messageIds.length).fill('?').join(', ');
+    const rows = this.db.query(`SELECT * FROM messages WHERE id IN (${holes})`).all(...messageIds) as any[];
+    return rows.map(rowToMessage);
   }
 
   async history(conversationId: string, before: string | undefined): Promise<WireMessage[]> {

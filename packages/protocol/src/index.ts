@@ -165,6 +165,10 @@ export interface WireMessage {
   readonly signature: string;
   /** Server-stamped receipt time. Clients are not trusted with the clock. */
   readonly sentAt: number;
+  /** When another member first received it, or null. Server-stamped. */
+  readonly deliveredAt: number | null;
+  /** When another member first read it, or null. Server-stamped. */
+  readonly readAt: number | null;
 }
 
 /** Presence: whether a peer is mid-message. Never affects stored state. */
@@ -196,7 +200,14 @@ export type ClientMessage =
   /** Ask for a page of history, older than `before` (a message id) if given. */
   | { t: 'history'; conversationId: string; before?: string }
   /** Fire-and-forget typing indicator. Never stored. */
-  | { t: 'typing'; conversationId: string; typing: boolean };
+  | { t: 'typing'; conversationId: string; typing: boolean }
+  /**
+   * Messages this client has now displayed to its user. Ids, not a watermark:
+   * `seq` is per-sender, so "up to N" has no single meaning in a group. The
+   * server ignores any id that is not in the conversation or was sent by the
+   * reader themselves.
+   */
+  | { t: 'read'; conversationId: string; messageIds: string[] };
 
 // --- server -> client -------------------------------------------------------
 
@@ -232,6 +243,12 @@ export type ServerMessage =
    * on the server; a client never asserts its own presence.
    */
   | { t: 'presence'; userIds: string[] }
+  /**
+   * Someone other than the sender received or read these messages. Sent to the
+   * sender only, and it names no reader: one stamp per message, meaning
+   * "someone", which is all the ticks claim.
+   */
+  | { t: 'receipt'; messageIds: string[]; kind: 'delivered' | 'read'; at: number }
   | { t: 'error'; code: ErrorCode; message: string };
 
 export type ErrorCode =
