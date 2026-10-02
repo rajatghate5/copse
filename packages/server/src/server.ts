@@ -72,6 +72,26 @@ export interface CopseServer {
   sessions: Sessions;
 }
 
+/**
+ * Cache headers for the built client. These were absent, which is not a neutral
+ * default: a response with no Cache-Control is one a browser may reuse on its
+ * own judgement, and the document it would reuse is the one naming which
+ * fingerprinted bundle to load. A stale index.html therefore pins the whole
+ * client at the previous deploy - a shipped fix goes on looking unfixed, which
+ * is a very expensive way to find out.
+ *
+ * So: /assets/* is content-addressed by Vite (the name changes when the bytes
+ * do) and can be kept for a year; index.html must be revalidated every time.
+ */
+function staticResponse(file: ReturnType<typeof Bun.file>, path: string): Response {
+  const fingerprinted = path.startsWith('/assets/');
+  return new Response(file, {
+    headers: {
+      'cache-control': fingerprinted ? 'public, max-age=31536000, immutable' : 'no-cache',
+    },
+  });
+}
+
 export function createServer(opts: ServerOptions): CopseServer {
   const { store, bootstrap } = opts;
   const sessions = new Sessions();
@@ -257,9 +277,9 @@ export function createServer(opts: ServerOptions): CopseServer {
     app.get('*', async (c) => {
       const path = new URL(c.req.url).pathname;
       const file = Bun.file(`${dir}${path === '/' ? '/index.html' : path}`);
-      if (await file.exists()) return new Response(file);
+      if (await file.exists()) return staticResponse(file, path);
       // Unknown path with no dot => an SPA route; hand back index.html.
-      if (!path.includes('.')) return new Response(Bun.file(`${dir}/index.html`));
+      if (!path.includes('.')) return staticResponse(Bun.file(`${dir}/index.html`), '/index.html');
       return c.notFound();
     });
   }

@@ -8,6 +8,8 @@
  */
 
 import { afterAll, describe, expect, test } from 'bun:test';
+import { mkdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import type { Server } from 'bun';
 type AnyServer = Server<any>;
 import {
@@ -47,9 +49,9 @@ interface Harness {
   store: Store;
 }
 
-async function startServer(store: Store): Promise<Harness> {
+async function startServer(store: Store, staticDir?: string): Promise<Harness> {
   await store.init();
-  const app = createServer({ store, bootstrap: BOOTSTRAP });
+  const app = createServer({ store, bootstrap: BOOTSTRAP, staticDir });
   const server = Bun.serve({ port: 0, fetch: app.fetch, websocket: app.websocket });
   return { base: `http://localhost:${server.port}`, server, store };
 }
@@ -580,6 +582,36 @@ function runSuite(name: string, makeStore: () => Store) {
       expect(await h.store.memberIds(made.conversation.id)).toEqual([aliceId]);
 
       a.ws.close();
+    });
+
+    test('the client document is revalidated and its fingerprinted assets are not', async () => {
+      // A built client, in miniature: a document naming a fingerprinted bundle.
+      const dir = `${tmpdir()}/copse-static-${crypto.randomUUID()}`;
+      await mkdir(`${dir}/assets`, { recursive: true });
+      await Bun.write(`${dir}/index.html`, '<!doctype html><div id="root"></div><script src="/assets/index-abc123.js"></script>');
+      await Bun.write(`${dir}/assets/index-abc123.js`, 'console.log(1)');
+
+      const h = await startServer(makeStore(), dir);
+      servers.push(h.server);
+
+      // The document must be revalidated: it is what names the bundle, so a
+      // cached copy would pin the client at the previous deploy.
+      const doc = await fetch(`${h.base}/`);
+      expect(doc.status).toBe(200);
+      expect(doc.headers.get('cache-control')).toBe('no-cache');
+
+      // The bundle is content-addressed, so it can be kept for a year.
+      const asset = await fetch(`${h.base}/assets/index-abc123.js`);
+      expect(asset.status).toBe(200);
+      expect(asset.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+
+      // An SPA route falls back to the document, and is cached like one.
+      const route = await fetch(`${h.base}/somewhere`);
+      expect(route.status).toBe(200);
+      expect(route.headers.get('cache-control')).toBe('no-cache');
+      expect(await route.text()).toContain('id="root"');
+
+      await rm(dir, { recursive: true, force: true });
     });
 
     test('a socket is refused for a room the user is not in', async () => {
