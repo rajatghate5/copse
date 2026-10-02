@@ -121,18 +121,28 @@ export async function saveAccount(a: StoredAccount): Promise<boolean> {
     await tx('account', 'readwrite', (s) => s.put(a, 'me'));
     const back = await tx<StoredAccount>('account', 'readonly', (s) => s.get('me'));
     inIdb = back?.userId === a.userId;
-  } catch { /* fall through to the copy */ }
-  return inIdb || localSave(a);
+  } catch { /* the copy may still take it */ }
+  // Both, always. Short-circuiting here is what left localStorage empty for
+  // everyone whose IndexedDB was fine - that is, for everyone who needed the
+  // copy only later, when it had stopped being fine.
+  const inLocal = localSave(a);
+  return inIdb || inLocal;
 }
 
 export async function loadAccount(): Promise<StoredAccount | null> {
   let fromIdb: StoredAccount | null = null;
   try { fromIdb = (await tx<StoredAccount>('account', 'readonly', (s) => s.get('me'))) ?? null; }
   catch { /* try the copy */ }
-  if (fromIdb) return fromIdb;
+
+  // Repair in whichever direction is missing, so an account that predates the
+  // copy gains one, and one that survived only in localStorage goes back into
+  // IndexedDB now that it is answering again.
+  if (fromIdb) {
+    if (localLoad()?.userId !== fromIdb.userId) localSave(fromIdb);
+    return fromIdb;
+  }
 
   const fallback = localLoad();
-  // IndexedDB may be working again after failing once; put the record back.
   if (fallback) { try { await tx('account', 'readwrite', (s) => s.put(fallback, 'me')); } catch { /* ignore */ } }
   return fallback;
 }
