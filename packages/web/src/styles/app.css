@@ -335,8 +335,9 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 
 /* Light / Dark / System, with the live one filled rather than labelled. */
 .pm-seg { display: flex; gap: 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 3px; flex: none; }
-.pm-seg button { border: 0; background: transparent; color: var(--muted); border-radius: 7px; padding: 5px 9px; font-size: 12.5px; font-weight: 500; font-family: inherit; min-height: 30px; }
-.pm-seg button.on { background: var(--accent-soft); color: var(--accent-ink); font-weight: 700; }
+.pm-seg button { border: 0; background: transparent; color: var(--muted); border-radius: 7px; width: 34px; height: 30px; display: grid; place-items: center; font-family: inherit; }
+.pm-seg button svg { width: 16px; height: 16px; }
+.pm-seg button.on { background: var(--accent-soft); color: var(--accent-ink); }
 
 .pm-switch { width: 44px; height: 26px; border-radius: 999px; background: #cfd8d1; border: 0; position: relative; flex: none; padding: 0; transition: background .16s ease; }
 .pm-switch.on { background: var(--accent); }

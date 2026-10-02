@@ -26,11 +26,20 @@ import { useRoomStore } from '@/features/rooms/roomStore.ts';
 import { useTheme, type ThemeChoice } from '@/lib/theme.ts';
 import { initials } from '@/lib/format.ts';
 import { disable, enable, permission, wanted } from '@/features/chat/notify.ts';
+import { Sun } from '@/assets/svgs/sun/index.tsx';
+import { Moon } from '@/assets/svgs/moon/index.tsx';
+import { Monitor } from '@/assets/svgs/monitor/index.tsx';
 
-const THEMES: { value: ThemeChoice; label: string }[] = [
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-  { value: 'system', label: 'System' },
+/**
+ * Icons rather than words: three labels crowded the row, and sun / moon /
+ * display are about as understood as interface glyphs get. The label stays as
+ * the accessible name and the hover title, so nothing depends on reading the
+ * picture.
+ */
+const THEMES: { value: ThemeChoice; label: string; Icon: typeof Sun }[] = [
+  { value: 'light', label: 'Light', Icon: Sun },
+  { value: 'dark', label: 'Dark', Icon: Moon },
+  { value: 'system', label: 'Follow the system', Icon: Monitor },
 ];
 
 function ThemeSegment() {
@@ -44,10 +53,12 @@ function ThemeSegment() {
           // aria-pressed, not a label change: the current state has to be
           // readable without inferring it from what the button offers to do.
           aria-pressed={choice === t.value}
+          aria-label={t.label}
+          title={t.label}
           className={choice === t.value ? 'on' : ''}
           onClick={() => setChoice(t.value)}
         >
-          {t.label}
+          <t.Icon aria-hidden="true" />
         </button>
       ))}
     </div>
