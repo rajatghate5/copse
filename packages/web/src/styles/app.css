@@ -284,3 +284,4 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 /* Storage was refused, so this device will not stay signed in. Worth saying
    plainly: the alternative is the user being silently signed out on reload. */
 .store-warn { flex: none; margin-top: 10px; padding: 9px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.45; background: color-mix(in srgb, var(--warm) 13%, var(--panel)); color: var(--exp); border: 1px solid color-mix(in srgb, var(--warm) 28%, transparent); }
+.p-note { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: var(--faint); }

@@ -14,6 +14,7 @@ import { useRoomStore } from '@/features/rooms/roomStore.ts';
 import { useChatStore, statusOf, type ChatMessage } from '@/features/chat/store/chatStore.ts';
 import { SocketService } from '@/features/chat/services/socket.ts';
 import { dequeue, enqueue, pending } from '@/lib/idb.ts';
+import { notifyMessage } from '@/features/chat/notify.ts';
 
 export const socket = new SocketService();
 
@@ -94,6 +95,8 @@ async function handleFrame(msg: ServerMessage): Promise<void> {
       const text = await tryDecrypt(wire, sender.keys.sigPub);
       if (text === null) return; // no key yet; history will bring it after 'key'
       store.addMessage(toMessage(wire, text, false));
+      // After the message is in the store, so clicking through finds it there.
+      notifyMessage(sender.displayName, wire.conversationId);
       return;
     }
 
