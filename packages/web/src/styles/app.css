@@ -328,7 +328,9 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .pm-empty { color: var(--muted); font-size: 13.5px; }
 .pm-note { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--faint); }
 .pm-last { margin-top: 20px; }
-.pm-danger { color: var(--danger); font-weight: 600; cursor: pointer; }
+/* Centred: no confirmation step stands behind it, so it reads as a button
+   rather than the next row in a list. */
+.pm-danger { color: var(--danger); font-weight: 600; cursor: pointer; justify-content: center; text-align: center; }
 .pm-danger:hover { background: color-mix(in srgb, var(--danger) 7%, transparent); }
 
 /* Light / Dark / System, with the live one filled rather than labelled. */

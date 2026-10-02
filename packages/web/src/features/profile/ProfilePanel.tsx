@@ -97,7 +97,13 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
         <div className="pm-body">
           <div className="pm-label">
             <span>Rooms</span>
-            <span className="pm-count">{me.isAdmin ? 'no room limit' : `${rooms.length} of ${MAX_ROOMS_PER_USER}`}</span>
+            {/* Admin still needs the count — "no limit" alone hid how many there
+                were. Non-admins get the count against the cap they have. */}
+            <span className="pm-count">
+              {me.isAdmin
+                ? `${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'} · no limit`
+                : `${rooms.length} of ${MAX_ROOMS_PER_USER}`}
+            </span>
           </div>
           <div className="pm-group">
             {rooms.length === 0 && <div className="pm-row pm-empty">You're not in a room yet.</div>}
@@ -113,8 +119,8 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
           <p className="pm-note">
             Up to {ROOM_MAX_MEMBERS} people in a room.{' '}
             {me.isAdmin
-              ? `As admin you can create any number of rooms — the ${ROOM_MAX_MEMBERS}-person cap still applies to each one.`
-              : `You can be in ${MAX_ROOMS_PER_USER} at a time.`}
+              ? `As admin you can make as many rooms as you like — the ${ROOM_MAX_MEMBERS}-person cap still applies to each one.`
+              : `You can be in ${MAX_ROOMS_PER_USER} rooms at a time.`}
           </p>
 
           <div className="pm-label"><span>Settings</span></div>
@@ -145,6 +151,9 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
           </p>
 
           <div className="pm-group pm-last">
+            {/* Centred rather than list-aligned: it acts immediately, with no
+                confirmation behind it, so it should read as a button being
+                pressed and not as the next row in a list. */}
             <button type="button" className="pm-row pm-danger" onClick={() => void signOut()}>
               Sign out
             </button>
