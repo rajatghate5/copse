@@ -364,6 +364,79 @@ function runSuite(name: string, makeStore: () => Store) {
       b.ws.close();
     });
 
+    test('stamps delivered when a recipient who was offline fetches history', async () => {
+      const h = await startServer(makeStore());
+      servers.push(h.server);
+
+      const alice = identityFromMnemonic(generateMnemonicPhrase());
+      const bob = identityFromMnemonic(generateMnemonicPhrase());
+      const { userId: aliceId, roomId } = await bootstrapRoom(h.base, 'alice', alice);
+      const aliceCookie = await login(h.base, 'alice', alice);
+      const code = await firstRoomCode(h.base, aliceCookie);
+      const { userId: bobId } = await joinRoom(h.base, 'bob', bob, code);
+      const bobCookie = await login(h.base, 'bob', bob);
+
+      // Both on, only long enough to create the conversation.
+      const a = openSocket(h.base, aliceCookie, roomId);
+      const b1 = openSocket(h.base, bobCookie, roomId);
+      const aReady = (await waitFor(() => a.frames.find((f) => f.t === 'ready'))) as Extract<ServerMessage, { t: 'ready' }>;
+      await waitFor(() => b1.frames.find((f) => f.t === 'ready'));
+      const bobSummary = aReady.users.find((u: UserSummary) => u.id === bobId)!;
+
+      const convKey = generateConversationKey();
+      a.ws.send(JSON.stringify({
+        t: 'createConversation', kind: 'direct', titleCiphertext: null,
+        members: [
+          { userId: aliceId, wrappedKey: packWrappedKey(await wrapKeyFor(convKey, alice.encPub)) },
+          { userId: bobId, wrappedKey: packWrappedKey(await wrapKeyFor(convKey, base64ToBytes(bobSummary.keys.encPub))) },
+        ],
+      }));
+      const bConv = (await waitFor(() => b1.frames.find((f) => f.t === 'conversation'))) as Extract<ServerMessage, { t: 'conversation' }>;
+      const conversationId = bConv.conversation.id;
+
+      // Bob leaves. Presence dropping to Alice alone is the signal his socket
+      // is really gone, so the send below has nobody to deliver to.
+      b1.ws.close();
+      await waitFor(() => {
+        const f = a.frames.filter((x): x is Extract<ServerMessage, { t: 'presence' }> => x.t === 'presence').at(-1);
+        return f && f.userIds.length === 1 ? f : undefined;
+      });
+
+      const sealed = await sealMessage(convKey, alice.sigPriv, { conversationId, senderId: aliceId, seq: 1 }, utf8ToBytes('hello bob'));
+      a.ws.send(JSON.stringify({
+        t: 'send', conversationId, seq: 1,
+        iv: bytesToBase64(sealed.iv), ciphertext: bytesToBase64(sealed.ciphertext), signature: bytesToBase64(sealed.signature),
+      }));
+
+      // It lands in the database undelivered: nobody was there to take it.
+      let page = await h.store.history(conversationId, undefined);
+      for (let i = 0; i < 200 && page.length === 0; i++) {
+        await new Promise((r) => setTimeout(r, 10));
+        page = await h.store.history(conversationId, undefined);
+      }
+      expect(page).toHaveLength(1);
+      expect(page[0]!.deliveredAt).toBeNull();
+      const messageId = page[0]!.id;
+
+      // He comes back and asks for history. Handing it to him IS delivery.
+      const b2 = openSocket(h.base, bobCookie, roomId);
+      await waitFor(() => b2.frames.find((f) => f.t === 'ready'));
+      b2.ws.send(JSON.stringify({ t: 'history', conversationId }));
+
+      const delivered = await waitFor(() =>
+        a.frames.find((f): f is Extract<ServerMessage, { t: 'receipt' }> => f.t === 'receipt' && f.kind === 'delivered'),
+      );
+      expect(delivered.messageIds).toEqual([messageId]);
+
+      const after = await h.store.history(conversationId, undefined);
+      expect(after[0]!.deliveredAt).toBeGreaterThan(0);
+      // Still unread: he has it, he has not reported looking at it.
+      expect(after[0]!.readAt).toBeNull();
+
+      a.ws.close();
+      b2.ws.close();
+    });
+
     test('a socket is refused for a room the user is not in', async () => {
       const h = await startServer(makeStore());
       servers.push(h.server);

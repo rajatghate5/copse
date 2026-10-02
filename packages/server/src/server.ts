@@ -271,6 +271,23 @@ export function createServer(opts: ServerOptions): CopseServer {
   };
 
   /**
+   * Tell each sender which of THEIR messages just reached this state. One frame
+   * per sender, carrying only that sender's own ids.
+   */
+  function fanReceipts(
+    messages: { id: string; senderId: string }[],
+    roomId: string,
+    kind: 'delivered' | 'read',
+    at: number,
+  ): void {
+    const bySender = new Map<string, string[]>();
+    for (const m of messages) bySender.set(m.senderId, [...(bySender.get(m.senderId) ?? []), m.id]);
+    for (const [senderId, ids] of bySender) {
+      hub.send(senderId, roomId, { t: 'receipt', messageIds: ids, kind, at });
+    }
+  }
+
+  /**
    * Tell a room who is on it. Derived from the socket registry, never from a
    * client: the server owns this state, as it does every other.
    */
@@ -367,7 +384,7 @@ export function createServer(opts: ServerOptions): CopseServer {
         if (memberIds.some((id) => id !== me && live.has(id))) {
           const at = Date.now();
           await store.markDelivered([stored.id], at);
-          hub.send(me, room, { t: 'receipt', messageIds: [stored.id], kind: 'delivered', at });
+          fanReceipts([stored], room, 'delivered', at);
         }
         return;
       }
@@ -377,12 +394,24 @@ export function createServer(opts: ServerOptions): CopseServer {
           return send(ws, { t: 'error', code: 'not_a_member', message: 'not a member' });
         }
         const messages = await store.history(msg.conversationId, msg.before);
-        return send(ws, {
+        send(ws, {
           t: 'history',
           conversationId: msg.conversationId,
           messages,
           done: messages.length === 0,
         });
+
+        // Handing a member's own socket someone else's message IS delivery, and
+        // it is the only place it gets stamped for anyone who was offline when
+        // it was sent. Without this a message sits on one tick forever unless
+        // the recipient happens to open the thread.
+        const fresh = messages.filter((m) => m.senderId !== me && m.deliveredAt === null);
+        if (fresh.length > 0) {
+          const at = Date.now();
+          await store.markDelivered(fresh.map((m) => m.id), at);
+          fanReceipts(fresh, room, 'delivered', at);
+        }
+        return;
       }
 
       case 'read': {
@@ -396,12 +425,7 @@ export function createServer(opts: ServerOptions): CopseServer {
         if (theirs.length === 0) return;
         const at = Date.now();
         await store.markRead(theirs.map((m) => m.id), at);
-        // One frame per sender, carrying only that sender's own messages.
-        const bySender = new Map<string, string[]>();
-        for (const m of theirs) bySender.set(m.senderId, [...(bySender.get(m.senderId) ?? []), m.id]);
-        for (const [senderId, ids] of bySender) {
-          hub.send(senderId, room, { t: 'receipt', messageIds: ids, kind: 'read', at });
-        }
+        fanReceipts(theirs, room, 'read', at);
         return;
       }
 
