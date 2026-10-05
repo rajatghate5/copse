@@ -52,7 +52,12 @@ function receiptLine(message: ChatMessage, isGroup: boolean, otherCount: number)
     return message.status === 'read' ? 'Read' : message.status === 'delivered' ? 'Delivered, not read yet' : 'Sent';
   }
   const seen = message.seenBy ?? 0;
-  if (seen === 0) return `Read by nobody yet, of ${otherCount}`;
+  // The tick and the count come from different places: the tick from "somebody
+  // read it", the count from a row per reader. A message read before those rows
+  // were kept has the first and not the second, and saying "read by nobody" over
+  // a read tick is a contradiction. Say what is actually known - it was read -
+  // rather than a number that is only an artefact of when the counting started.
+  if (seen === 0) return message.status === 'read' ? 'Read' : 'Nobody has read it yet';
   if (seen >= otherCount) return `Read by everyone — all ${otherCount}`;
   return `Read by ${seen} of ${otherCount}`;
 }
