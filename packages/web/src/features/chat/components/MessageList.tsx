@@ -46,8 +46,8 @@ interface Props {
   typingNames: string[];
   /** This account's handle, so a mention of you reads differently. */
   myHandle: string;
-  /** Open the actions for one message (reply, forward, edit). */
-  onAct: (message: ChatMessage) => void;
+  /** Open the actions for one message, anchored to the control pressed. */
+  onAct: (message: ChatMessage, anchor: DOMRect) => void;
 }
 
 /**

@@ -24,7 +24,7 @@ import { ConversationList } from '@/features/chat/components/ConversationList.ts
 import { SafetyNumberSheet } from '@/features/chat/components/SafetyNumberSheet.tsx';
 import { NewConversationDialog } from '@/features/chat/components/NewConversationDialog.tsx';
 import { AddMembersDialog } from '@/features/chat/components/AddMembersDialog.tsx';
-import { MessageActions } from '@/features/chat/components/MessageActions.tsx';
+import { MessageMenu } from '@/features/chat/components/MessageMenu.tsx';
 import { ForwardDialog } from '@/features/chat/components/ForwardDialog.tsx';
 import { RoomSwitcher } from '@/features/rooms/RoomSwitcher.tsx';
 import { ProfilePanel } from '@/features/profile/ProfilePanel.tsx';
@@ -53,7 +53,7 @@ export function ChatScreen() {
   const [showAdd, setShowAdd] = useState(false);
   // One message at a time: which one's actions are open, what we are replying
   // to, what we are editing, and what we are forwarding.
-  const [acting, setActing] = useState<ChatMessage | null>(null);
+  const [acting, setActing] = useState<{ message: ChatMessage; anchor: DOMRect } | null>(null);
   const [replyTo, setReplyTo] = useState<Quote | null>(null);
   const [editing, setEditing] = useState<{ id: string; seq: number; text: string } | null>(null);
   const [forwarding, setForwarding] = useState<ChatMessage | null>(null);
@@ -83,7 +83,7 @@ export function ChatScreen() {
 
   // Stable, so a new message does not re-render every bubble (MessageItem is
   // memoised and this is one of its props).
-  const onAct = useCallback((message: ChatMessage) => setActing(message), []);
+  const onAct = useCallback((message: ChatMessage, anchor: DOMRect) => setActing({ message, anchor }), []);
 
   const startReply = (m: ChatMessage) => {
     setReplyTo(quoteOf(m.id, m.mine ? 'You' : nameOf(m.senderId), m.text));
@@ -205,12 +205,13 @@ export function ChatScreen() {
       {showNew && <NewConversationDialog onClose={() => setShowNew(false)} />}
       {showAdd && active && <AddMembersDialog conversation={active} onClose={() => setShowAdd(false)} />}
       {acting && (
-        <MessageActions
-          message={acting}
+        <MessageMenu
+          message={acting.message}
+          anchor={acting.anchor}
           canForward={Object.keys(conversations).length > 1}
-          onReply={() => startReply(acting)}
-          onForward={() => { setForwarding(acting); setActing(null); }}
-          onEdit={() => startEdit(acting)}
+          onReply={() => startReply(acting.message)}
+          onForward={() => { setForwarding(acting.message); setActing(null); }}
+          onEdit={() => startEdit(acting.message)}
           onClose={() => setActing(null)}
         />
       )}

@@ -11,6 +11,7 @@ import { expiryLabel, messageTime } from '@/lib/format.ts';
 import { Check } from '@/assets/svgs/check/index.tsx';
 import { CheckDouble } from '@/assets/svgs/check-double/index.tsx';
 import { Clock } from '@/assets/svgs/clock/index.tsx';
+import { ChevronDown } from '@/assets/svgs/chevron-down/index.tsx';
 
 interface Props {
   message: ChatMessage;
@@ -20,8 +21,11 @@ interface Props {
   myHandle: string;
   /** Whether this conversation has more than two people in it. */
   isGroup: boolean;
-  /** Open the actions for this message (reply, forward, edit). */
-  onAct?: (message: ChatMessage) => void;
+  /**
+   * Open the actions for this message. The trigger's rect goes with it, because
+   * the menu is anchored to where the control was when it was pressed.
+   */
+  onAct?: (message: ChatMessage, anchor: DOMRect) => void;
 }
 
 /**
@@ -81,9 +85,10 @@ function MessageItemBase({ message, showSender, senderName, myHandle, isGroup, o
           type="button"
           className="b-act"
           aria-label="Message actions"
-          onClick={() => onAct(message)}
+          aria-haspopup="menu"
+          onClick={(e) => onAct(message, e.currentTarget.getBoundingClientRect())}
         >
-          ⋯
+          <ChevronDown />
         </button>
       )}
     </div>

@@ -145,7 +145,9 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 
 /* A message's own controls and the things it can carry. */
 .bubble { position: relative; }
-.b-act { position: absolute; top: 2px; right: 6px; width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: var(--faint); font-size: 15px; line-height: 1; opacity: 0; transition: opacity .12s; }
+.b-act { position: absolute; top: 3px; right: 5px; width: 20px; height: 20px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--faint); opacity: 0; transition: opacity .12s; }
+.b-act svg { width: 14px; height: 14px; }
+.b-act:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .bubble:hover .b-act, .b-act:focus-visible { opacity: 1; }
 .bubble.me .b-act { color: color-mix(in srgb, var(--me-ink) 70%, transparent); }
 /* No hover on a touch screen, so the control is simply always there. */
@@ -162,14 +164,15 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .edited { font-size: 10px; font-style: italic; opacity: .75; }
 .seen { font-size: 10px; opacity: .8; }
 
-/* The actions sheet, and the strip the composer shows while a draft is tied to
-   another message. */
-.sheet.acts { max-width: 380px; }
+/* The message dropdown. Fixed to the viewport because it is placed from the
+   trigger's rect at open time, inside a list that re-measures and scrolls. */
+.msg-menu { position: fixed; z-index: 60; min-width: 148px; padding: 5px; background: var(--panel); border: 1px solid var(--line); border-radius: 11px; box-shadow: var(--shadow); display: flex; flex-direction: column; }
+.mm-item { display: block; width: 100%; padding: 9px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 13.5px; font-weight: 500; text-align: left; }
+.mm-item:hover:not(:disabled), .mm-item:focus-visible { background: var(--accent-soft); color: var(--accent-ink); outline: none; }
+.mm-item:disabled { opacity: .45; }
+
+/* Still used by the forward dialog, to show what is being sent. */
 .act-preview { font-size: 13px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; margin-bottom: 12px; max-height: 76px; overflow: hidden; }
-.act { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 11px 13px; margin-bottom: 7px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel-2); color: var(--ink); font-size: 14px; font-weight: 600; text-align: left; }
-.act:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-ink); }
-.act:disabled { opacity: .5; }
-.act-note { font-size: 11.5px; font-weight: 400; color: var(--faint); }
 
 .draft-strip { position: absolute; bottom: calc(100% - 1px); left: 0; right: 0; display: flex; align-items: center; gap: 9px; padding: 8px 14px; background: var(--panel-2); border-top: 1px solid var(--line); }
 .ds-kind { font-size: 11.5px; font-weight: 700; color: var(--accent-ink); flex: none; }
