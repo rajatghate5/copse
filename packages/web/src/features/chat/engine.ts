@@ -15,6 +15,7 @@ import { useChatStore, statusOf, type ChatMessage } from '@/features/chat/store/
 import { SocketService } from '@/features/chat/services/socket.ts';
 import { dequeue, enqueue, pending } from '@/lib/idb.ts';
 import { notifyMessage } from '@/features/chat/notify.ts';
+import { mentions } from '@/features/chat/mentions.ts';
 import { lastConversation, rememberConversation, rememberRoom } from '@/features/chat/place.ts';
 import { loadSeen } from '@/features/chat/unread.ts';
 
@@ -121,7 +122,9 @@ async function handleFrame(msg: ServerMessage): Promise<void> {
       if (text === null) return; // no key yet; history will bring it after 'key'
       store.addMessage(toMessage(wire, text, false));
       // After the message is in the store, so clicking through finds it there.
-      notifyMessage(sender.displayName, wire.conversationId);
+      // The mention is found here, on the decrypted text: the server cannot see
+      // who was named and so could never have told anyone.
+      notifyMessage(sender.displayName, wire.conversationId, mentions(text, me.username));
       return;
     }
 

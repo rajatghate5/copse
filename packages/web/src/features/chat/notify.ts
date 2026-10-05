@@ -54,12 +54,15 @@ export function disable(): void {
  * Notify about one message. Silent when the tab is already visible: you are
  * looking at the app, so the message list is the notification.
  */
-export function notifyMessage(senderName: string, conversationId: string): void {
+export function notifyMessage(senderName: string, conversationId: string, mentionedYou = false): void {
   if (!supported() || !wanted() || Notification.permission !== 'granted') return;
   if (document.visibilityState === 'visible') return;
   try {
     const n = new Notification(senderName, {
-      body: 'sent a message',
+      // Still not the message - only which of the two kinds of message it is.
+      // Being named is the one thing worth interrupting someone for, so it is
+      // worth the single word it costs.
+      body: mentionedYou ? 'mentioned you' : 'sent a message',
       // One notification per conversation: ten unread messages should not be
       // ten banners, and a replaced one keeps the latest sender.
       tag: `copse:${conversationId}`,

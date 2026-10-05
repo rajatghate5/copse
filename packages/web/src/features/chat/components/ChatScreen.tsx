@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { UserSummary } from '@copse/protocol';
 import { useChatStore } from '@/features/chat/store/chatStore.ts';
 import { useAuth } from '@/features/auth/authStore.ts';
 import { useRoomStore } from '@/features/rooms/roomStore.ts';
@@ -57,6 +58,11 @@ export function ChatScreen() {
   const subtitle = active ? conversationSubtitle(active, users, me.id) : '';
   const otherId = active && active.kind === 'direct' ? otherMemberIds(active, me.id)[0] : undefined;
   const otherUser = otherId ? users[otherId] : undefined;
+  // The others in the open conversation, for @ completion in the composer.
+  const members = useMemo(
+    () => (active ? otherMemberIds(active, me.id).map((id) => users[id]).filter((u): u is UserSummary => Boolean(u)) : []),
+    [active, users, me.id],
+  );
 
   const openConversation = (id: string) => {
     openAndRemember(id);
@@ -122,7 +128,7 @@ export function ChatScreen() {
                 {/* Keyed by conversation: the list caches measured row heights
                     and whether the reader is at the end, and neither means
                     anything in a different thread. */}
-                <MessageList key={active.id} messages={messages} isGroup={active.kind === 'group'} nameOf={nameOf} typingNames={typingNames} />
+                <MessageList key={active.id} messages={messages} isGroup={active.kind === 'group'} nameOf={nameOf} typingNames={typingNames} myHandle={me.username} />
 
                 {connection !== 'online' && (
                   <div className={`conn-banner ${connection === 'connecting' ? 'waking' : 'reconnecting'}`}>
@@ -130,7 +136,12 @@ export function ChatScreen() {
                   </div>
                 )}
                 <div className="lock-strip"><Lock /> End-to-end encrypted · disappears after 7 days</div>
-                <Composer peerName={title} onSend={send} onTyping={notifyTyping} />
+                <Composer
+                  peerName={title}
+                  members={members}
+                  onSend={send}
+                  onTyping={notifyTyping}
+                />
               </>
             )}
           </div>

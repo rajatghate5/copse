@@ -143,9 +143,33 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 @keyframes typedot { 0%, 60%, 100% { transform: translateY(0); opacity: .35; } 30% { transform: translateY(-4px); opacity: .9; } }
 @media (prefers-reduced-motion: reduce) { .typing-b .dot { animation: none; } }
 
+/* The composer grows two layers: an emoji grid and an @ completion list. Both
+   are anchored to the composer and open upwards, because it sits at the bottom
+   of the thread and a popup below it would be off screen. */
+.composer { position: relative; }
+.emoji-pop { position: absolute; bottom: calc(100% + 8px); left: 10px; width: min(330px, calc(100% - 20px)); max-height: 268px; overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 10px 12px; z-index: 20; }
+.emoji-group + .emoji-group { margin-top: 10px; }
+.emoji-head { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); font-family: var(--mono); margin-bottom: 5px; }
+.emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 2px; }
+.emoji-btn { font-size: 19px; line-height: 1; padding: 5px; border: 0; border-radius: 8px; background: transparent; }
+.emoji-btn:hover { background: var(--panel-2); }
+
+.mention-pop { position: absolute; bottom: calc(100% + 8px); left: 10px; width: min(300px, calc(100% - 20px)); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 6px; z-index: 20; display: flex; flex-direction: column; }
+.mention-row { display: flex; align-items: baseline; gap: 7px; padding: 8px 10px; border: 0; border-radius: 9px; background: transparent; text-align: left; }
+.mention-row.on { background: var(--accent-soft); }
+.mention-name { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.mention-handle { font-size: 12px; color: var(--faint); }
+
+/* A mention in a message. Bolder than the text around it, and unmistakable when
+   it is you - that is the whole reason someone types one. */
+.mention { font-weight: 600; color: var(--accent-ink); }
+.bubble.me .mention { color: var(--me-ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--me-ink) 50%, transparent); }
+.mention.me { background: var(--accent-soft); color: var(--accent-ink); border-radius: 5px; padding: 0 3px; }
+.bubble.me .mention.me { background: color-mix(in srgb, var(--me-ink) 24%, transparent); color: var(--me-ink); }
+
 .composer { display: flex; gap: 8px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); flex: none; }
 .attach { width: 40px; height: 40px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); display: grid; place-items: center; flex: none; }
-.attach:hover { color: var(--accent); border-color: var(--accent); }
+.attach:hover, .attach.on { color: var(--accent); border-color: var(--accent); }
 .attach svg { width: 18px; height: 18px; }
 .composer input.msg { flex: 1; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 11px 16px; font-size: 14px; color: var(--ink); font-family: inherit; }
 .composer input.msg:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
