@@ -21,6 +21,7 @@ import type {
 } from '@copse/protocol';
 import {
   ADD_MEMBER_SQL,
+  ADD_READ_SQL,
   EDIT_MESSAGE_SQL,
   HISTORY_PAGE,
   MIGRATIONS,
@@ -32,6 +33,8 @@ import {
   rowToMessage,
   rowToRoom,
   rowToUser,
+  seenCountSql,
+  SWEEP_READS_SQL,
   type NewConversation,
   type NewMessage,
   type NewRoom,
@@ -290,7 +293,7 @@ export class TursoStore implements Store {
       sql: 'INSERT INTO messages (id, conversation_id, sender_id, seq, iv, ciphertext, signature, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       args: [id, m.conversationId, m.senderId, m.seq, m.iv, m.ciphertext, m.signature, sentAt],
     });
-    return { id, ...m, sentAt, deliveredAt: null, readAt: null, editedAt: null };
+    return { id, ...m, sentAt, deliveredAt: null, readAt: null, editedAt: null, seenBy: 0 };
   }
 
   async editMessage(
@@ -320,6 +323,24 @@ export class TursoStore implements Store {
     await this.db.execute({ sql: markSql('read_at', messageIds.length), args: [at, ...messageIds] });
   }
 
+  async addReads(messageIds: string[], userId: string, at: number): Promise<Record<string, number>> {
+    if (messageIds.length === 0) return {};
+    await this.db.batch(
+      messageIds.map((id) => ({ sql: ADD_READ_SQL, args: [id, userId, at] })),
+      'write',
+    );
+    return this.seenCounts(messageIds);
+  }
+
+  /** Reader counts for these ids. Absent means nobody, so zero. */
+  private async seenCounts(messageIds: string[]): Promise<Record<string, number>> {
+    if (messageIds.length === 0) return {};
+    const r = await this.db.execute({ sql: seenCountSql(messageIds.length), args: messageIds });
+    const out: Record<string, number> = {};
+    for (const row of r.rows as any[]) out[row.message_id] = Number(row.n);
+    return out;
+  }
+
   async messagesByIds(messageIds: string[]): Promise<WireMessage[]> {
     if (messageIds.length === 0) return [];
     const holes = Array(messageIds.length).fill('?').join(', ');
@@ -345,7 +366,10 @@ export class TursoStore implements Store {
       sql: 'SELECT * FROM messages WHERE conversation_id = ? AND sent_at < ? AND sent_at >= ? ORDER BY sent_at DESC LIMIT ?',
       args: [conversationId, beforeAt, floor, HISTORY_PAGE],
     });
-    return r.rows.map((row) => rowToMessage(row as any));
+    const messages = r.rows.map((row) => rowToMessage(row as any));
+    // One grouped query for the page, mirroring the local backend.
+    const counts = await this.seenCounts(messages.map((m) => m.id));
+    return messages.map((m) => ({ ...m, seenBy: counts[m.id] ?? 0 }));
   }
 
   async sweepExpired(cutoff: number): Promise<number> {
@@ -353,6 +377,8 @@ export class TursoStore implements Store {
       sql: 'DELETE FROM messages WHERE sent_at < ?',
       args: [cutoff],
     });
+    // Who read a message is a fact about that message, so it goes with it.
+    await this.db.execute(SWEEP_READS_SQL);
     return r.rowsAffected;
   }
 }

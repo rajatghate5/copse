@@ -521,6 +521,19 @@ export function createServer(opts: ServerOptions): CopseServer {
         const at = Date.now();
         await store.markRead(theirs.map((m) => m.id), at);
         fanReceipts(theirs, room, 'read', at);
+        // And the per-reader rows, which are what a count can be taken from.
+        // The ticks above say "somebody"; this says how many, still nobody by
+        // name. Each sender is told only about their own messages.
+        const counts = await store.addReads(theirs.map((m) => m.id), me, at);
+        const bySender = new Map<string, { messageId: string; count: number }[]>();
+        for (const m of theirs) {
+          const list = bySender.get(m.senderId) ?? [];
+          list.push({ messageId: m.id, count: counts[m.id] ?? 0 });
+          bySender.set(m.senderId, list);
+        }
+        for (const [senderId, list] of bySender) {
+          hub.send(senderId, room, { t: 'seen', counts: list });
+        }
         return;
       }
 

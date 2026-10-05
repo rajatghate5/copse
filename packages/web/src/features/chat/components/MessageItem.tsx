@@ -18,6 +18,8 @@ interface Props {
   senderName: string;
   /** This account's handle, so a mention of you can be marked as yours. */
   myHandle: string;
+  /** Whether this conversation has more than two people in it. */
+  isGroup: boolean;
   /** Open the actions for this message (reply, forward, edit). */
   onAct?: (message: ChatMessage) => void;
 }
@@ -44,7 +46,7 @@ function Body({ text, myHandle }: { text: string; myHandle: string }) {
   );
 }
 
-function MessageItemBase({ message, showSender, senderName, myHandle, onAct }: Props) {
+function MessageItemBase({ message, showSender, senderName, myHandle, isGroup, onAct }: Props) {
   const expiry = expiryLabel(message.sentAt);
   return (
     <div className={`bubble ${message.mine ? 'me' : 'them'}`}>
@@ -66,6 +68,12 @@ function MessageItemBase({ message, showSender, senderName, myHandle, onAct }: P
         {/* Said plainly rather than hidden: the others saw the first version. */}
         {message.editedAt ? <span className="edited">edited</span> : null}
         {expiry && <span className="exp">{expiry}</span>}
+        {/* Only in a group, and only for your own: in a direct chat the second
+            tick already means the one other person, and a "seen by 1" beside it
+            would be the same fact written twice. */}
+        {message.mine && isGroup && (message.seenBy ?? 0) > 0 && (
+          <span className="seen">Seen by {message.seenBy}</span>
+        )}
         {message.mine && <Ticks status={message.status} />}
       </div>
       {onAct && (

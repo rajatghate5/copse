@@ -76,6 +76,22 @@ CREATE TABLE IF NOT EXISTS members (
   joined_at        INTEGER NOT NULL,
   PRIMARY KEY (conversation_id, user_id)
 );
+/*
+ * Who has read which message. One row per reader, which is what makes a count
+ * possible at all - the messages table carries "somebody read it" and nothing
+ * more. Only the count ever leaves the server: the rows exist so it can be
+ * computed, not so anyone can be told who was reading.
+ *
+ * Rows are deleted with the message they refer to (see sweepExpired). A record
+ * of who read a message is a fact about that message, and retention is meant to
+ * be real.
+ */
+CREATE TABLE IF NOT EXISTS message_reads (
+  message_id  TEXT NOT NULL,
+  user_id     TEXT NOT NULL,
+  at          INTEGER NOT NULL,
+  PRIMARY KEY (message_id, user_id)
+);
 CREATE TABLE IF NOT EXISTS messages (
   id               TEXT PRIMARY KEY,
   conversation_id  TEXT NOT NULL,
@@ -212,6 +228,12 @@ export interface Store {
    */
   markDelivered(messageIds: string[], at: number): Promise<void>;
   markRead(messageIds: string[], at: number): Promise<void>;
+  /**
+   * Record that one person read these messages, and return the new count for
+   * each. Re-reading is a no-op, so a client replaying its receipts after a
+   * reconnect cannot inflate anything.
+   */
+  addReads(messageIds: string[], userId: string, at: number): Promise<Record<string, number>>;
   /** Look up messages by id, for validating a batch of receipts. */
   messagesByIds(messageIds: string[]): Promise<WireMessage[]>;
   /** A page of history, newest-first, older than `before` (a message id) if set. */
@@ -294,10 +316,25 @@ export function rowToMessage(r: MessageRow): WireMessage {
     deliveredAt: r.delivered_at ?? null,
     readAt: r.read_at ?? null,
     editedAt: r.edited_at ?? null,
+    // Filled in by whoever has the counts for the page; a lone row knows none.
+    seenBy: 0,
   };
 }
 
 /** The author check lives in the statement, not only in the caller. */
+/** First read per person wins, so a reconnecting client cannot inflate a count. */
+export const ADD_READ_SQL =
+  'INSERT OR IGNORE INTO message_reads (message_id, user_id, at) VALUES (?, ?, ?)';
+
+/** Reads whose message is gone. Runs with the retention sweep. */
+export const SWEEP_READS_SQL =
+  'DELETE FROM message_reads WHERE message_id NOT IN (SELECT id FROM messages)';
+
+/** Counts for a set of message ids, as placeholders so ids never reach the SQL. */
+export function seenCountSql(count: number): string {
+  return `SELECT message_id, COUNT(*) AS n FROM message_reads WHERE message_id IN (${Array(count).fill('?').join(', ')}) GROUP BY message_id`;
+}
+
 export const EDIT_MESSAGE_SQL =
   'UPDATE messages SET iv = ?, ciphertext = ?, signature = ?, edited_at = ? WHERE id = ? AND sender_id = ?';
 

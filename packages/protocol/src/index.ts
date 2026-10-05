@@ -170,6 +170,12 @@ export interface WireMessage {
    * swaps the ciphertext; it still cannot read either version.
    */
   readonly editedAt: number | null;
+  /**
+   * How many members other than the sender have reported reading it. A count,
+   * never a list: in a group it answers "did this land?" without turning the
+   * thread into a record of who was present when.
+   */
+  readonly seenBy: number;
   /** When another member first received it, or null. Server-stamped. */
   readonly deliveredAt: number | null;
   /** When another member first read it, or null. Server-stamped. */
@@ -282,6 +288,11 @@ export type ServerMessage =
    * "someone", which is all the ticks claim.
    */
   | { t: 'receipt'; messageIds: string[]; kind: 'delivered' | 'read'; at: number }
+  /**
+   * How many people have now read these messages of yours. Sent to the sender
+   * only, and it names nobody - the count is the whole of it.
+   */
+  | { t: 'seen'; counts: { messageId: string; count: number }[] }
   | { t: 'error'; code: ErrorCode; message: string };
 
 export type ErrorCode =

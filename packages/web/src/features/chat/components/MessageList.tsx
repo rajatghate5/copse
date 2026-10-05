@@ -178,7 +178,7 @@ export function MessageList({ messages, isGroup, nameOf, typingNames, myHandle, 
           {row.kind === 'day' && <div className="day">{row.label}</div>}
           {row.kind === 'msg' && (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <MessageItem message={row.message} showSender={row.showSender} senderName={row.senderName} myHandle={myHandle} onAct={onAct} />
+              <MessageItem message={row.message} showSender={row.showSender} senderName={row.senderName} myHandle={myHandle} isGroup={isGroup} onAct={onAct} />
             </div>
           )}
           {row.kind === 'typing' && (

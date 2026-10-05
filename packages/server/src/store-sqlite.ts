@@ -19,6 +19,7 @@ import type {
 } from '@copse/protocol';
 import {
   ADD_MEMBER_SQL,
+  ADD_READ_SQL,
   EDIT_MESSAGE_SQL,
   HISTORY_PAGE,
   MIGRATIONS,
@@ -30,6 +31,8 @@ import {
   rowToMessage,
   rowToRoom,
   rowToUser,
+  seenCountSql,
+  SWEEP_READS_SQL,
   type NewConversation,
   type NewMessage,
   type NewRoom,
@@ -277,7 +280,7 @@ export class SqliteStore implements Store {
         'INSERT INTO messages (id, conversation_id, sender_id, seq, iv, ciphertext, signature, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .run(id, m.conversationId, m.senderId, m.seq, m.iv, m.ciphertext, m.signature, sentAt);
-    return { id, ...m, sentAt, deliveredAt: null, readAt: null, editedAt: null };
+    return { id, ...m, sentAt, deliveredAt: null, readAt: null, editedAt: null, seenBy: 0 };
   }
 
   async editMessage(
@@ -305,6 +308,24 @@ export class SqliteStore implements Store {
     this.db.query(markSql('read_at', messageIds.length)).run(at, ...messageIds);
   }
 
+  async addReads(messageIds: string[], userId: string, at: number): Promise<Record<string, number>> {
+    if (messageIds.length === 0) return {};
+    const insert = this.db.query(ADD_READ_SQL);
+    this.db.transaction(() => {
+      for (const id of messageIds) insert.run(id, userId, at);
+    })();
+    return this.seenCounts(messageIds);
+  }
+
+  /** Reader counts for these ids. Absent means nobody, so zero. */
+  private seenCounts(messageIds: string[]): Record<string, number> {
+    if (messageIds.length === 0) return {};
+    const rows = this.db.query(seenCountSql(messageIds.length)).all(...messageIds) as any[];
+    const out: Record<string, number> = {};
+    for (const r of rows) out[r.message_id] = Number(r.n);
+    return out;
+  }
+
   async messagesByIds(messageIds: string[]): Promise<WireMessage[]> {
     if (messageIds.length === 0) return [];
     const holes = Array(messageIds.length).fill('?').join(', ');
@@ -326,11 +347,17 @@ export class SqliteStore implements Store {
         'SELECT * FROM messages WHERE conversation_id = ? AND sent_at < ? AND sent_at >= ? ORDER BY sent_at DESC LIMIT ?',
       )
       .all(conversationId, beforeAt, floor, HISTORY_PAGE) as any[];
-    return rows.map(rowToMessage);
+    const messages = rows.map(rowToMessage);
+    // One grouped query for the page, so "seen by" survives a reload without a
+    // query per message.
+    const counts = this.seenCounts(messages.map((m) => m.id));
+    return messages.map((m) => ({ ...m, seenBy: counts[m.id] ?? 0 }));
   }
 
   async sweepExpired(cutoff: number): Promise<number> {
     const res = this.db.query('DELETE FROM messages WHERE sent_at < ?').run(cutoff);
+    // Who read a message is a fact about that message, so it goes with it.
+    this.db.query(SWEEP_READS_SQL).run();
     return res.changes;
   }
 }

@@ -168,6 +168,10 @@ async function handleFrame(msg: ServerMessage): Promise<void> {
       store.applyReceipt(msg.messageIds, msg.kind);
       return;
 
+    case 'seen':
+      store.applySeen(msg.counts);
+      return;
+
     case 'error':
       // Non-fatal; the UI shows connection state, and illegal actions are rare.
       console.warn('[copse] server error:', msg.code, msg.message);
@@ -187,6 +191,7 @@ function toMessage(
     seq: wire.seq,
     sentAt: wire.sentAt,
     editedAt: wire.editedAt,
+    seenBy: wire.seenBy,
     mine,
     text: body.text,
     quote: body.quote,

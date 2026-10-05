@@ -45,6 +45,8 @@ export interface ChatMessage {
   quote?: Quote;
   /** Who wrote it originally, when this message was forwarded. */
   forwardedFrom?: string;
+  /** How many others have read it. A count, never a list of names. */
+  seenBy?: number;
   /** Set while an unreadable message waits for its key. */
   locked?: boolean;
 }
@@ -78,6 +80,8 @@ interface ChatState {
   setTyping: (conversationId: string, userId: string, typing: boolean) => void;
   setOnline: (userIds: string[]) => void;
   applyReceipt: (messageIds: string[], kind: 'delivered' | 'read') => void;
+  /** How many people have read these messages of ours. */
+  applySeen: (counts: { messageId: string; count: number }[]) => void;
   /** Replace one message's text after its author edited it. */
   applyEdit: (conversationId: string, messageId: string, text: string, editedAt: number) => void;
   setActive: (id: string | null) => void;
@@ -120,6 +124,24 @@ export const useChatStore = create<ChatState>((set) => ({
           // Never downgrade: receipts can arrive out of order.
           wanted.has(m.id) && RANK[kind] > RANK[m.status] ? { ...m, status: kind } : m,
         );
+        touched = true;
+      }
+      return touched ? { messages: next } : s;
+    }),
+
+  applySeen: (counts) =>
+    set((s) => {
+      const want = new Map(counts.map((c) => [c.messageId, c.count]));
+      const next: typeof s.messages = { ...s.messages };
+      let touched = false;
+      for (const [convId, list] of Object.entries(s.messages)) {
+        if (!list.some((m) => want.has(m.id))) continue;
+        next[convId] = list.map((m) => {
+          const count = want.get(m.id);
+          // Only ever up: counts can arrive out of order, and a reader cannot
+          // un-read a message.
+          return count !== undefined && count > (m.seenBy ?? 0) ? { ...m, seenBy: count } : m;
+        });
         touched = true;
       }
       return touched ? { messages: next } : s;

@@ -701,6 +701,96 @@ function runSuite(name: string, makeStore: () => Store) {
       b.ws.close();
     });
 
+    test('a group message counts its readers without naming them', async () => {
+      const h = await startServer(makeStore());
+      servers.push(h.server);
+
+      const alice = identityFromMnemonic(generateMnemonicPhrase());
+      const bob = identityFromMnemonic(generateMnemonicPhrase());
+      const cara = identityFromMnemonic(generateMnemonicPhrase());
+      const { userId: aliceId, roomId } = await bootstrapRoom(h.base, 'alice', alice);
+      const aliceCookie = await login(h.base, 'alice', alice);
+      const code = await firstRoomCode(h.base, aliceCookie);
+      const { userId: bobId } = await joinRoom(h.base, 'bob', bob, code);
+      const { userId: caraId } = await joinRoom(h.base, 'cara', cara, code);
+      const bobCookie = await login(h.base, 'bob', bob);
+      const caraCookie = await login(h.base, 'cara', cara);
+
+      const a = openSocket(h.base, aliceCookie, roomId);
+      const b = openSocket(h.base, bobCookie, roomId);
+      const c = openSocket(h.base, caraCookie, roomId);
+      const aReady = (await waitFor(() => a.frames.find((f) => f.t === 'ready'))) as Extract<ServerMessage, { t: 'ready' }>;
+      await waitFor(() => b.frames.find((f) => f.t === 'ready'));
+      await waitFor(() => c.frames.find((f) => f.t === 'ready'));
+      const bobKeys = aReady.users.find((u: UserSummary) => u.id === bobId)!.keys.encPub;
+      const caraKeys = aReady.users.find((u: UserSummary) => u.id === caraId)!.keys.encPub;
+
+      const convKey = generateConversationKey();
+      a.ws.send(JSON.stringify({
+        t: 'createConversation', kind: 'group', titleCiphertext: null,
+        members: [
+          { userId: aliceId, wrappedKey: packWrappedKey(await wrapKeyFor(convKey, alice.encPub)) },
+          { userId: bobId, wrappedKey: packWrappedKey(await wrapKeyFor(convKey, base64ToBytes(bobKeys))) },
+          { userId: caraId, wrappedKey: packWrappedKey(await wrapKeyFor(convKey, base64ToBytes(caraKeys))) },
+        ],
+      }));
+      const made = (await waitFor(() => b.frames.find((f) => f.t === 'conversation'))) as Extract<ServerMessage, { t: 'conversation' }>;
+      const conversationId = made.conversation.id;
+
+      const sealed = await sealMessage(convKey, alice.sigPriv, { conversationId, senderId: aliceId, seq: 1 }, utf8ToBytes('all of you'));
+      a.ws.send(JSON.stringify({
+        t: 'send', conversationId, seq: 1,
+        iv: bytesToBase64(sealed.iv), ciphertext: bytesToBase64(sealed.ciphertext), signature: bytesToBase64(sealed.signature),
+      }));
+      const toBob = (await waitFor(() => b.frames.find((f) => f.t === 'message'))) as Extract<ServerMessage, { t: 'message' }>;
+      const messageId = toBob.message.id;
+      expect(toBob.message.seenBy).toBe(0);
+
+      // Bob reads it: one reader.
+      b.ws.send(JSON.stringify({ t: 'read', conversationId, messageIds: [messageId] }));
+      const first = await waitFor(() =>
+        a.frames.find((f): f is Extract<ServerMessage, { t: 'seen' }> => f.t === 'seen'),
+      );
+      expect(first.counts).toEqual([{ messageId, count: 1 }]);
+      // A count, and nothing that could name a reader.
+      expect(JSON.stringify(first)).not.toContain(bobId);
+
+      // Bob reads it again: still one reader, not two.
+      b.ws.send(JSON.stringify({ t: 'read', conversationId, messageIds: [messageId] }));
+      await new Promise((r) => setTimeout(r, 80));
+      const latest = a.frames.filter((f): f is Extract<ServerMessage, { t: 'seen' }> => f.t === 'seen').at(-1)!;
+      expect(latest.counts[0]!.count).toBe(1);
+
+      // Cara reads it too: two.
+      c.ws.send(JSON.stringify({ t: 'read', conversationId, messageIds: [messageId] }));
+      const two = await waitFor(() => {
+        const f = a.frames.filter((x): x is Extract<ServerMessage, { t: 'seen' }> => x.t === 'seen').at(-1);
+        return f && f.counts[0]!.count === 2 ? f : undefined;
+      });
+      expect(two.counts).toEqual([{ messageId, count: 2 }]);
+
+      // The count survives a reload, because history carries it.
+      const page = await h.store.history(conversationId, undefined);
+      expect(page[0]!.seenBy).toBe(2);
+
+      // Only the sender is told. Bob's own socket never hears about it.
+      expect(b.frames.some((f) => f.t === 'seen')).toBe(false);
+      expect(c.frames.some((f) => f.t === 'seen')).toBe(false);
+
+      // Retention takes the read rows with the message. Cara had already read
+      // it, so if her row survived the sweep, re-adding it would leave the count
+      // at 2 (the insert ignores a duplicate). A count of exactly 1 is only
+      // possible if both rows were really deleted.
+      const removed = await h.store.sweepExpired(Date.now() + 1000);
+      expect(removed).toBeGreaterThan(0);
+      const afterSweep = await h.store.addReads([messageId], caraId, Date.now());
+      expect(afterSweep[messageId]).toBe(1);
+
+      a.ws.close();
+      b.ws.close();
+      c.ws.close();
+    });
+
     test('a socket is refused for a room the user is not in', async () => {
       const h = await startServer(makeStore());
       servers.push(h.server);
