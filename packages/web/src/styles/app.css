@@ -16,6 +16,7 @@
   --line:#e1e3ec; --accent:#3a4f8c; --accent-ink:#2a3b6b; --accent-soft:#e6e9f6; --warm:#b8781f; --plum:#7d5a8c; --online:#2fa36a; --scroll:#c5c8d4; --scroll-hover:#a8adbd;
   --them:#eef0f6; --them-ink:#252a38; --me:#3a4f8c; --me-ink:#f3f5fc;
   --exp:#8a7a4a; --exp-bg:#f0ead9; --danger:#b4442f;
+  --tick:color-mix(in srgb, var(--me-ink) 68%, transparent); --tick-read:#67e8f9;
   --shadow:0 1px 2px rgba(22,26,42,.06), 0 12px 34px rgba(22,26,42,.10);
   --sans:"Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
   --serif:"Fraunces", Georgia, serif;
@@ -25,12 +26,14 @@
   --bg:#0b0d13; --panel:#151822; --panel-2:#11141d; --ink:#e5e8f1; --muted:#a1a8bc; --faint:#828a9f;
   --line:#242a39; --accent:#8096dc; --accent-ink:#aabcf2; --accent-soft:#1a2139; --warm:#c99a63; --plum:#b98fe0; --online:#49c98c; --scroll:#2c3243; --scroll-hover:#3d4557;
   --them:#1a1e29; --them-ink:#d5dae8; --me:#41558f; --me-ink:#f0f3fc; --exp:#c2ad76; --exp-bg:#241f12; --danger:#e07a63;
+  --tick:color-mix(in srgb, var(--me-ink) 68%, transparent); --tick-read:#67e8f9;
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 14px 40px rgba(0,0,0,.5);
 }}
 :root[data-theme="dark"] {
   --bg:#0b0d13; --panel:#151822; --panel-2:#11141d; --ink:#e5e8f1; --muted:#a1a8bc; --faint:#828a9f;
   --line:#242a39; --accent:#8096dc; --accent-ink:#aabcf2; --accent-soft:#1a2139; --warm:#c99a63; --plum:#b98fe0; --online:#49c98c; --scroll:#2c3243; --scroll-hover:#3d4557;
   --them:#1a1e29; --them-ink:#d5dae8; --me:#41558f; --me-ink:#f0f3fc; --exp:#c2ad76; --exp-bg:#241f12; --danger:#e07a63;
+  --tick:color-mix(in srgb, var(--me-ink) 68%, transparent); --tick-read:#67e8f9;
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 14px 40px rgba(0,0,0,.5);
 }
 
@@ -162,7 +165,6 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .q-text { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .bubble.me .q-text { color: color-mix(in srgb, var(--me-ink) 80%, transparent); }
 .edited { font-size: 10px; font-style: italic; opacity: .75; }
-.seen { font-size: 10px; opacity: .8; }
 
 /* The message dropdown. Fixed to the viewport because it is placed from the
    trigger's rect at open time, inside a list that re-measures and scrolls. */
@@ -196,6 +198,7 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .mention-row.on { background: var(--accent-soft); }
 .mention-name { font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .mention-handle { font-size: 12px; color: var(--faint); }
+.mention-hint { margin-left: auto; font-size: 11px; color: var(--faint); font-family: var(--mono); }
 
 /* A mention in a message. Bolder than the text around it, and unmistakable when
    it is you - that is the whole reason someone types one. */
@@ -356,10 +359,22 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .ritem.active .av-dot { box-shadow: 0 0 0 2px var(--accent-soft); }
 
 /* ---------- delivery ticks ----------
-   Four states, and never colour alone: the tint says "read", the .sr-only text
-   says it in words for anyone who cannot see the difference. */
+   Four states, and never colour alone: the .sr-only text says each one in words.
+
+   "Read" used to be --accent-ink, a dark indigo drawn on the indigo "me" bubble
+   - 1.38:1, less visible than the delivered tick it was meant to outrank. Colour
+   alone cannot fix that either: measured against the bubble, any bright tint
+   scores below the near-white tick it has to stand out from. So the difference
+   is weight, not hue. Sent and delivered are stepped back to a muted tick, and
+   read is full-strength cyan, larger and thicker, with the count beside it. */
+.status { display: inline-flex; align-items: center; gap: 4px; }
 .status svg { width: 14px; height: 14px; }
-.status.read svg { width: 15px; height: 15px; }
+.status.read svg { width: 16px; height: 16px; stroke-width: 2.7; }
+/* How many of the others have read it, next to the ticks that say someone has.
+   A ratio rather than a bare count: "2" is only meaningful if you remember how
+   many people are in the room. */
+.seen-of { font-size: 10px; font-family: var(--mono); font-weight: 600; letter-spacing: -.02em; }
+.status.read .seen-of { color: var(--tick-read); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 
 /* Storage was refused, so this device will not stay signed in. Worth saying

@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import { mentions, pendingHandle, splitMentions } from '../src/features/chat/mentions.ts';
+import { isEveryone, mentions, mentionsEveryone, pendingHandle, splitMentions } from '../src/features/chat/mentions.ts';
 
 describe('splitMentions', () => {
   test('leaves text with no mention in one piece', () => {
@@ -106,5 +106,41 @@ describe('pendingHandle', () => {
 
   test('is null when there is no @ before the caret', () => {
     expect(pendingHandle('plain text', 5)).toBeNull();
+  });
+});
+
+describe('@guys - naming everyone', () => {
+  test('the group handles are recognised', () => {
+    expect(isEveryone('guys')).toBe(true);
+    expect(isEveryone('everyone')).toBe(true);
+    expect(isEveryone('all')).toBe(true);
+    expect(isEveryone('ana')).toBe(false);
+  });
+
+  test('a message naming everyone is found as such', () => {
+    expect(mentionsEveryone('morning @guys')).toBe(true);
+    expect(mentionsEveryone('morning @ana')).toBe(false);
+  });
+
+  test('naming everyone names you, whoever you are', () => {
+    // This is what makes @guys notify the whole group: the same check the
+    // notification uses for your own handle has to answer yes.
+    expect(mentions('morning @guys', 'ana')).toBe(true);
+    expect(mentions('morning @guys', 'devi')).toBe(true);
+    expect(mentions('morning @everyone', 'ana')).toBe(true);
+    expect(mentions('morning @all', 'ana')).toBe(true);
+  });
+
+  test('a message to one person does not reach everyone', () => {
+    expect(mentions('morning @ana', 'devi')).toBe(false);
+  });
+
+  test('it is still just a mention in the text', () => {
+    expect(splitMentions('hi @guys!')[1]).toEqual({ text: '@guys', handle: 'guys' });
+  });
+
+  test('a word that merely starts with one is not it', () => {
+    expect(mentionsEveryone('@guysnight out')).toBe(false);
+    expect(mentionsEveryone('@allan is here')).toBe(false);
   });
 });

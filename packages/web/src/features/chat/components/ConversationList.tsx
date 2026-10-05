@@ -68,9 +68,11 @@ export function ConversationList({ onSelect, onNew }: Props) {
               </span>
               <span className="ri-end">
                 {last && <span className="ri-time">{messageTime(last.sentAt)}</span>}
+                {/* "+9" rather than "9+"; the label keeps the exact number for
+                    anyone reading it aloud. */}
                 {unread > 0 && (
                   <span className="ri-badge" aria-label={`${unread} unread`}>
-                    {unread > 9 ? '9+' : unread}
+                    {unread > 9 ? '+9' : unread}
                   </span>
                 )}
               </span>

@@ -117,6 +117,21 @@ export const MAX_USERNAME_LENGTH = 24;
  * a handle reads the same however it was typed and is safe in a path. Returns
  * null if nothing usable remains - the caller rejects the registration.
  */
+/**
+ * Handles that mean "everyone in this conversation" rather than a person.
+ * Clients expand them when deciding who a message named; the server never sees
+ * a mention at all, since they are written inside the ciphertext.
+ *
+ * They are refused at registration so the two can never collide: if someone
+ * were called `guys`, nobody could tell whether a message meant them or the
+ * room, and the person would be notified by every broadcast forever.
+ */
+export const EVERYONE_HANDLES = ['guys', 'everyone', 'all'] as const;
+
+export function isReservedUsername(username: string): boolean {
+  return (EVERYONE_HANDLES as readonly string[]).includes(username);
+}
+
 export function cleanUsername(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const s = raw.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');

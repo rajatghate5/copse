@@ -20,6 +20,7 @@ import {
   cleanName,
   cleanRoomName,
   cleanUsername,
+  isReservedUsername,
   parseClientMessage,
   KEY_B64_MAX,
   MAX_CIPHERTEXT_LENGTH,
@@ -118,6 +119,11 @@ export function createServer(opts: ServerOptions): CopseServer {
     if (!body) return c.json({ error: 'bad request' }, 400);
 
     const username = cleanUsername(body.username);
+    // `guys` and friends mean "everyone here" in a message, so nobody may take
+    // one as their own name - a mention has to be unambiguous.
+    if (username && isReservedUsername(username)) {
+      return c.json({ error: 'that username is reserved' }, 409);
+    }
     if (!username) return c.json({ error: 'bad username' }, 400);
     const displayName = cleanName(body.displayName);
     const encPub = cleanB64(body.keys?.encPub, KEY_B64_MAX);

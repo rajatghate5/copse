@@ -16,7 +16,7 @@
  * clients, on the text they have decrypted.
  */
 
-import { MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH } from '@copse/protocol';
+import { EVERYONE_HANDLES, MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH } from '@copse/protocol';
 
 const HANDLE = `[a-z0-9_-]{${MIN_USERNAME_LENGTH},${MAX_USERNAME_LENGTH}}`;
 
@@ -51,10 +51,24 @@ export function splitMentions(text: string): TextPart[] {
   return parts;
 }
 
-/** Whether this message mentions one particular handle. */
+/** Whether a handle is the "everyone here" one rather than a person's. */
+export function isEveryone(handle: string): boolean {
+  return (EVERYONE_HANDLES as readonly string[]).includes(handle.toLowerCase());
+}
+
+/** Whether this message names everyone - @guys, and its obvious synonyms. */
+export function mentionsEveryone(text: string): boolean {
+  return splitMentions(text).some((p) => p.handle !== undefined && isEveryone(p.handle));
+}
+
+/**
+ * Whether this message names you - by your own handle, or by naming everyone,
+ * since you are one of them. This is what decides whether a notification says
+ * someone mentioned you, so @guys has to count.
+ */
 export function mentions(text: string, handle: string): boolean {
   const want = handle.toLowerCase();
-  return splitMentions(text).some((p) => p.handle === want);
+  return splitMentions(text).some((p) => p.handle === want || (p.handle !== undefined && isEveryone(p.handle)));
 }
 
 /**

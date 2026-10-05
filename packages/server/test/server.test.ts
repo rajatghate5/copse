@@ -791,6 +791,38 @@ function runSuite(name: string, makeStore: () => Store) {
       c.ws.close();
     });
 
+    test('a reserved username cannot be registered', async () => {
+      const h = await startServer(makeStore());
+      servers.push(h.server);
+      const admin = identityFromMnemonic(generateMnemonicPhrase());
+      const { roomId } = await bootstrapRoom(h.base, 'admin', admin);
+      const adminCookie = await login(h.base, 'admin', admin);
+      const code = await firstRoomCode(h.base, adminCookie);
+
+      // "@guys" means everyone in a message, so nobody may be called it: the
+      // mention has to be unambiguous, and the person would otherwise be
+      // notified by every broadcast forever.
+      for (const taken of ['guys', 'everyone', 'all', 'GUYS']) {
+        const id = identityFromMnemonic(generateMnemonicPhrase());
+        const res = await fetch(`${h.base}/api/register`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ joinCode: code, username: taken, displayName: 'Nope', keys: keysOf(id), vault: FAKE_VAULT }),
+        });
+        expect(res.status).toBe(409);
+      }
+
+      // An ordinary name still works, so the gate is the list and not the path.
+      const ok = identityFromMnemonic(generateMnemonicPhrase());
+      const res = await fetch(`${h.base}/api/register`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ joinCode: code, username: 'guysy', displayName: 'Fine', keys: keysOf(ok), vault: FAKE_VAULT }),
+      });
+      expect(res.status).toBe(200);
+      expect(roomId).toBeTruthy();
+    });
+
     test('a socket is refused for a room the user is not in', async () => {
       const h = await startServer(makeStore());
       servers.push(h.server);

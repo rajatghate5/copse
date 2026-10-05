@@ -13,12 +13,21 @@
 
 import { useRef, useState } from 'react';
 import type { UserSummary } from '@copse/protocol';
+import { EVERYONE_HANDLES } from '@copse/protocol';
 import { pendingHandle } from '@/features/chat/mentions.ts';
 import type { Quote } from '@/features/chat/body.ts';
 import { Arrow } from '@/assets/svgs/arrow/index.tsx';
 import { Check } from '@/assets/svgs/check/index.tsx';
 import { Smile } from '@/assets/svgs/smile/index.tsx';
 import { EmojiPicker } from '@/features/chat/components/EmojiPicker.tsx';
+
+/** A row in the completion list: a member, or the "everyone" shorthand. */
+interface Choice {
+  id: string;
+  username: string;
+  displayName: string;
+  hint?: string;
+}
 
 interface Props {
   peerName: string;
@@ -48,8 +57,23 @@ export function Composer({ peerName, members, initialText = '', editing = false,
   const [dismissed, setDismissed] = useState(false);
 
   const pending = dismissed ? null : pendingHandle(text, caret);
-  const matches = pending
-    ? members.filter((m) => m.username.startsWith(pending.query) || m.displayName.toLowerCase().startsWith(pending.query)).slice(0, 6)
+  /**
+   * "Everyone" is offered as if it were a member, and first, because reaching
+   * the whole group is the common case worth one keystroke. Only when there is
+   * a group to reach: in a direct chat it would just be the other person's name
+   * written a second way. It is a reserved handle, so it can never collide with
+   * somebody actually called that.
+   */
+  const everyone: Choice | null = members.length > 1
+    ? { id: '@everyone', username: EVERYONE_HANDLES[0], displayName: 'Everyone', hint: `all ${members.length}` }
+    : null;
+  const matches: Choice[] = pending
+    ? [
+        ...(everyone && EVERYONE_HANDLES.some((h) => h.startsWith(pending.query)) ? [everyone] : []),
+        ...members
+          .filter((m) => m.username.startsWith(pending.query) || m.displayName.toLowerCase().startsWith(pending.query))
+          .map((m) => ({ id: m.id, username: m.username, displayName: m.displayName })),
+      ].slice(0, 6)
     : [];
   const open = matches.length > 0;
   const chosen = matches[Math.min(pick, matches.length - 1)];
@@ -76,9 +100,9 @@ export function Composer({ peerName, members, initialText = '', editing = false,
     });
   };
 
-  const complete = (user: UserSummary) => {
+  const complete = (choice: Choice) => {
     if (!pending) return;
-    insert(`@${user.username} `, pending.from);
+    insert(`@${choice.username} `, pending.from);
     setPick(0);
   };
 
@@ -109,6 +133,7 @@ export function Composer({ peerName, members, initialText = '', editing = false,
             >
               <span className="mention-name">{m.displayName}</span>
               <span className="mention-handle">@{m.username}</span>
+              {m.hint && <span className="mention-hint">{m.hint}</span>}
             </button>
           ))}
         </div>

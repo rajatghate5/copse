@@ -167,7 +167,7 @@ export function ChatScreen() {
                 {/* Keyed by conversation: the list caches measured row heights
                     and whether the reader is at the end, and neither means
                     anything in a different thread. */}
-                <MessageList key={active.id} messages={messages} isGroup={active.kind === 'group'} nameOf={nameOf} typingNames={typingNames} myHandle={me.username} onAct={onAct} />
+                <MessageList key={active.id} messages={messages} isGroup={active.kind === 'group'} nameOf={nameOf} typingNames={typingNames} myHandle={me.username} otherCount={members.length} onAct={onAct} />
 
                 {connection !== 'online' && (
                   <div className={`conn-banner ${connection === 'connecting' ? 'waking' : 'reconnecting'}`}>

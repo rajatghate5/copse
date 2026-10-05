@@ -28,7 +28,7 @@ export function useUnreadTitle(): void {
       if (id === activeId && document.visibilityState === 'visible') continue;
       total += unreadCount(messages[id], seen[id]);
     }
-    document.title = total > 0 ? `(${total > 9 ? '9+' : total}) ${BASE}` : BASE;
+    document.title = total > 0 ? `(${total > 9 ? '+9' : total}) ${BASE}` : BASE;
     return () => { document.title = BASE; };
   }, [messages, seen, activeId, conversations]);
 }
