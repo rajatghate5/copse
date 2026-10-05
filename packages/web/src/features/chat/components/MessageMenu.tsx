@@ -27,13 +27,38 @@ interface Props {
   anchor: DOMRect;
   /** Whether there is anywhere else to forward it to. */
   canForward: boolean;
+  /** Whether this conversation has more than two people in it. */
+  isGroup: boolean;
+  /** How many people are in it besides you. */
+  otherCount: number;
   onReply: () => void;
   onForward: () => void;
   onEdit: () => void;
   onClose: () => void;
 }
 
-export function MessageMenu({ message, anchor, canForward, onReply, onForward, onEdit, onClose }: Props) {
+/**
+ * What has become of your own message, in words. This is where the read count
+ * lives: asked for, rather than sitting in the corner of every bubble where a
+ * "0/3" is a number in your eyeline that says nothing the tick has not. In a
+ * group it is a ratio, because a bare count means nothing unless you are
+ * holding the size of the group in your head; in a direct chat the state alone
+ * is the whole story.
+ */
+function receiptLine(message: ChatMessage, isGroup: boolean, otherCount: number): string | null {
+  if (!message.mine) return null;
+  if (message.status === 'pending') return 'Not sent yet';
+  if (!isGroup || otherCount < 1) {
+    return message.status === 'read' ? 'Read' : message.status === 'delivered' ? 'Delivered, not read yet' : 'Sent';
+  }
+  const seen = message.seenBy ?? 0;
+  if (seen === 0) return `Read by nobody yet, of ${otherCount}`;
+  if (seen >= otherCount) return `Read by everyone — all ${otherCount}`;
+  return `Read by ${seen} of ${otherCount}`;
+}
+
+export function MessageMenu({ message, anchor, canForward, isGroup, otherCount, onReply, onForward, onEdit, onClose }: Props) {
+  const receipt = receiptLine(message, isGroup, otherCount);
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
@@ -86,6 +111,7 @@ export function MessageMenu({ message, anchor, canForward, onReply, onForward, o
         visibility: pos ? 'visible' : 'hidden',
       }}
     >
+      {receipt && <div className="mm-info">{receipt}</div>}
       <button type="button" role="menuitem" className="mm-item" autoFocus onClick={onReply}>Reply</button>
       <button type="button" role="menuitem" className="mm-item" disabled={!canForward} onClick={onForward}>
         Forward

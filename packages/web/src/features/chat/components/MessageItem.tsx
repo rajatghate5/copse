@@ -21,8 +21,6 @@ interface Props {
   myHandle: string;
   /** Whether this conversation has more than two people in it. */
   isGroup: boolean;
-  /** How many people are in it besides you, for the read ratio. */
-  otherCount: number;
   /**
    * Open the actions for this message. The trigger's rect goes with it, because
    * the menu is anchored to where the control was when it was pressed.
@@ -53,14 +51,8 @@ function Body({ text, myHandle }: { text: string; myHandle: string }) {
   );
 }
 
-function MessageItemBase({ message, showSender, senderName, myHandle, isGroup, otherCount, onAct }: Props) {
+function MessageItemBase({ message, showSender, senderName, myHandle, isGroup, onAct }: Props) {
   const expiry = expiryLabel(message.sentAt);
-  // Only your own messages in a group, and only once the server has one: a
-  // ratio on a message still in the outbox would be counting nothing. In a
-  // direct chat the second tick already means the one other person.
-  const seen = message.mine && isGroup && otherCount > 0 && message.status !== 'pending'
-    ? { count: message.seenBy ?? 0, of: otherCount }
-    : null;
   return (
     <div className={`bubble ${message.mine ? 'me' : 'them'}`}>
       {showSender && !message.mine && <div className="sender">{senderName}</div>}
@@ -81,7 +73,7 @@ function MessageItemBase({ message, showSender, senderName, myHandle, isGroup, o
         {/* Said plainly rather than hidden: the others saw the first version. */}
         {message.editedAt ? <span className="edited">edited</span> : null}
         {expiry && <span className="exp">{expiry}</span>}
-        {message.mine && <Ticks status={message.status} seen={seen} />}
+        {message.mine && <Ticks status={message.status} />}
       </div>
       {onAct && (
         <button
@@ -112,19 +104,18 @@ const TICKS: Record<Delivery, { icon: 'clock' | 'one' | 'two'; tint: string; lab
 };
 
 /**
- * `seen` is the group count: how many of the others have read it, out of how
- * many there are. Shown as a ratio because a bare "2" means nothing unless you
- * are holding the size of the group in your head, and spoken in full for anyone
- * who cannot see it.
+ * How many people have read it lives in the message's own menu, not here. A
+ * ratio in the corner of every bubble is a number in your eyeline whether or
+ * not you wanted it - and at 0 it says nothing the muted tick has not already
+ * said. The tick carries the state; the menu answers "who has seen this?" when
+ * that is the question being asked.
  */
-function Ticks({ status, seen }: { status: Delivery; seen: { count: number; of: number } | null }) {
+function Ticks({ status }: { status: Delivery }) {
   const t = TICKS[status];
-  const label = seen ? `${t.label} — read by ${seen.count} of ${seen.of}` : t.label;
   return (
-    <span className={`status${status === 'read' ? ' read' : ''}`} style={{ color: t.tint }} title={label}>
-      {seen && <span className="seen-of" aria-hidden="true">{seen.count}/{seen.of}</span>}
+    <span className={`status${status === 'read' ? ' read' : ''}`} style={{ color: t.tint }} title={t.label}>
       {t.icon === 'clock' ? <Clock /> : t.icon === 'one' ? <Check /> : <CheckDouble />}
-      <span className="sr-only">{label}</span>
+      <span className="sr-only">{t.label}</span>
     </span>
   );
 }
