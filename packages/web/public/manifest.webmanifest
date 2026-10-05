@@ -1,0 +1,16 @@
+{
+  "name": "Copse",
+  "short_name": "Copse",
+  "description": "A small, end-to-end encrypted chat for a handful of people.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#edeef3",
+  "theme_color": "#3a4f8c",
+  "orientation": "any",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
