@@ -1,16 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Copse">
   <rect width="64" height="64" rx="16" fill="#3a4f8c"/>
-  <g stroke="#c2cdef" stroke-width="2.4" stroke-linecap="round" opacity="0.85">
-    <line x1="32" y1="32" x2="18" y2="18"/>
-    <line x1="32" y1="32" x2="47" y2="19"/>
-    <line x1="32" y1="32" x2="19" y2="46"/>
-    <line x1="32" y1="32" x2="46" y2="46"/>
-  </g>
-  <g fill="#eef1fb">
-    <circle cx="32" cy="32" r="6.5"/>
-    <circle cx="18" cy="18" r="4"/>
-    <circle cx="19" cy="46" r="4"/>
-    <circle cx="46" cy="46" r="4"/>
-  </g>
-  <circle cx="47" cy="19" r="4.2" fill="#f0c45a"/>
+  <!-- Two bubbles: the one behind is dimmer, and the one in front is cut away
+       from it by a stroke in the background colour rather than an outline, so
+       the pair stays two shapes at 16px instead of merging into one. -->
+  <path d="M9 20a6 6 0 0 1 6-6h22a6 6 0 0 1 6 6v8a6 6 0 0 1-6 6H21l-6 5v-5a6 6 0 0 1-6-6z" fill="#c2cdef"/>
+  <path d="M23 33a6 6 0 0 1 6-6h20a6 6 0 0 1 6 6v9a6 6 0 0 1-6 6h-2l-7 5v-5H29a6 6 0 0 1-6-6z"
+        fill="#eef1fb" stroke="#3a4f8c" stroke-width="3.5" stroke-linejoin="round"/>
 </svg>
