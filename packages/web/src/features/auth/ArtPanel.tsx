@@ -49,7 +49,7 @@ interface Bubble {
   delay: number;
 }
 
-const TINTS = ['#3f8560', '#4c9a74', '#58a37f', '#2f6b4f', '#b8781f'];
+const TINTS = ['#4a5f9e', '#5d72b4', '#3a4f8c', '#6f84c6', '#b8781f'];
 
 /**
  * Spread across the band, two to a row, so neither edge is empty. Tops are

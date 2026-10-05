@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Copse">
-  <rect width="64" height="64" rx="16" fill="#2f6b4f"/>
+  <rect width="64" height="64" rx="16" fill="#3a4f8c"/>
   <g stroke="#bfe3cd" stroke-width="2.4" stroke-linecap="round" opacity="0.85">
     <line x1="32" y1="32" x2="18" y2="18"/>
     <line x1="32" y1="32" x2="47" y2="19"/>

@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import type { ConversationSummary, UserSummary, WireMessage } from '@copse/protocol';
+import { saveSeen, type Watermarks } from '@/features/chat/unread.ts';
 
 export type Delivery = 'pending' | 'sent' | 'delivered' | 'read';
 
@@ -52,6 +53,12 @@ interface ChatState {
   /** Room members with a live socket, as the server last reported them. */
   online: string[];
   activeId: string | null;
+  /**
+   * When each conversation was last looked at, per conversation id. Anything
+   * newer than the mark, from someone else, is unread. Loaded from this
+   * device's storage on connect; never sent anywhere.
+   */
+  seen: Watermarks;
 
   setConnection: (c: Connection) => void;
   applyReady: (users: UserSummary[], conversations: ConversationSummary[]) => void;
@@ -65,6 +72,10 @@ interface ChatState {
   setOnline: (userIds: string[]) => void;
   applyReceipt: (messageIds: string[], kind: 'delivered' | 'read') => void;
   setActive: (id: string | null) => void;
+  /** Replace the watermarks wholesale, from this device's storage on connect. */
+  hydrateSeen: (seen: Watermarks) => void;
+  /** Move one conversation's watermark forward. Never backwards. */
+  markSeen: (userId: string, conversationId: string, at: number) => void;
   reset: () => void;
 }
 
@@ -83,6 +94,7 @@ export const useChatStore = create<ChatState>((set) => ({
   typing: {},
   online: [],
   activeId: null,
+  seen: {},
 
   setConnection: (connection) => set({ connection }),
   // The server sends the whole list, so replacing it wholesale is the point.
@@ -159,5 +171,19 @@ export const useChatStore = create<ChatState>((set) => ({
 
   setActive: (activeId) => set({ activeId }),
 
+  hydrateSeen: (seen) => set({ seen }),
+
+  markSeen: (userId, conversationId, at) =>
+    set((s) => {
+      // Only ever forward: a late history page carrying older messages must not
+      // drag the mark back and make read things unread again.
+      if ((s.seen[conversationId] ?? 0) >= at) return s;
+      const seen = { ...s.seen, [conversationId]: at };
+      saveSeen(userId, seen);
+      return { seen };
+    }),
+
+  // The watermarks survive a reset: they describe what this person has read,
+  // which does not change because the socket reopened on another room.
   reset: () => set({ connection: 'connecting', users: {}, conversations: {}, messages: {}, typing: {}, online: [], activeId: null }),
 }));

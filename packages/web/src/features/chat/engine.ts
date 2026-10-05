@@ -16,6 +16,7 @@ import { SocketService } from '@/features/chat/services/socket.ts';
 import { dequeue, enqueue, pending } from '@/lib/idb.ts';
 import { notifyMessage } from '@/features/chat/notify.ts';
 import { lastConversation, rememberConversation, rememberRoom } from '@/features/chat/place.ts';
+import { loadSeen } from '@/features/chat/unread.ts';
 
 export const socket = new SocketService();
 
@@ -65,6 +66,9 @@ async function handleFrame(msg: ServerMessage): Promise<void> {
       useRoomStore.getState().setRooms(msg.rooms);
       useRoomStore.getState().setCurrent(msg.room.id);
       store.applyReady(msg.users, msg.conversations);
+      // What this device has already read, so the roster does not light up every
+      // conversation on every connect.
+      store.hydrateSeen(loadSeen(me.id));
       rememberRoom(me.id, msg.room.id);
       // Reopen the thread this account left open here. The remembered id is only
       // ever a hint: it opens if the server just listed it, and is otherwise

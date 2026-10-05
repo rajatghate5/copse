@@ -7,6 +7,7 @@
 import { useChatStore } from '@/features/chat/store/chatStore.ts';
 import { useAuth } from '@/features/auth/authStore.ts';
 import { conversationName, otherMemberIds, previewOf } from '@/features/chat/selectors.ts';
+import { unreadCount } from '@/features/chat/unread.ts';
 import { messageTime } from '@/lib/format.ts';
 import { Avatar } from '@/features/chat/components/Avatar.tsx';
 import { ListSkeleton } from '@/components/Skeleton.tsx';
@@ -23,6 +24,7 @@ export function ConversationList({ onSelect, onNew }: Props) {
   const connection = useChatStore((s) => s.connection);
   const users = useChatStore((s) => s.users);
   const activeId = useChatStore((s) => s.activeId);
+  const seen = useChatStore((s) => s.seen);
   const meId = useAuth((s) => s.me?.id ?? '');
 
   const list = Object.values(conversations).sort((a, b) => {
@@ -50,10 +52,13 @@ export function ConversationList({ onSelect, onNew }: Props) {
           const name = conversationName(conv, users, meId);
           const msgs = messages[conv.id];
           const last = msgs?.[msgs.length - 1];
+          // The open thread is never unread: you are looking at it, and the
+          // count would clear a beat later anyway once the read is reported.
+          const unread = conv.id === activeId ? 0 : unreadCount(msgs, seen[conv.id]);
           return (
             <button
               key={conv.id}
-              className={`ritem ${conv.id === activeId ? 'active' : ''}`}
+              className={`ritem ${conv.id === activeId ? 'active' : ''}${unread > 0 ? ' unread' : ''}`}
               onClick={() => onSelect(conv.id)}
             >
               <Avatar name={name} userIds={otherMemberIds(conv, meId)} />
@@ -61,7 +66,14 @@ export function ConversationList({ onSelect, onNew }: Props) {
                 <span className="ri-name">{name}</span>
                 <span className="ri-prev">{previewOf(msgs)}</span>
               </span>
-              {last && <span className="ri-time">{messageTime(last.sentAt)}</span>}
+              <span className="ri-end">
+                {last && <span className="ri-time">{messageTime(last.sentAt)}</span>}
+                {unread > 0 && (
+                  <span className="ri-badge" aria-label={`${unread} unread`}>
+                    {unread > 9 ? '9+' : unread}
+                  </span>
+                )}
+              </span>
             </button>
           );
         })}

@@ -13,6 +13,7 @@ import { lastConversation } from '@/features/chat/place.ts';
 import { useSocket } from '@/features/chat/hooks/useSocket.ts';
 import { useChat } from '@/features/chat/hooks/useChat.ts';
 import { useTypingIndicator } from '@/features/chat/hooks/useTypingIndicator.ts';
+import { useUnreadTitle } from '@/features/chat/hooks/useUnreadTitle.ts';
 import { conversationName, conversationSubtitle, otherMemberIds } from '@/features/chat/selectors.ts';
 import { Avatar } from '@/features/chat/components/Avatar.tsx';
 import { MessageList } from '@/features/chat/components/MessageList.tsx';
@@ -32,6 +33,7 @@ import { UserPlus } from '@/assets/svgs/user-plus/index.tsx';
 
 export function ChatScreen() {
   useSocket();
+  useUnreadTitle();
 
   const connection = useChatStore((s) => s.connection);
   const conversations = useChatStore((s) => s.conversations);

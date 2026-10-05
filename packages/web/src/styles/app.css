@@ -1,28 +1,36 @@
 @import 'tailwindcss';
 
-/* Verdant — the theme chosen from the direction mockups. Tokens for light,
-   with dark redefined under both the system preference and an explicit toggle,
-   exactly as the prototype established. Components read tokens only. */
+/* Indigo — tokens for light, with dark redefined under both the system
+   preference and an explicit toggle. Components read tokens only, so the whole
+   palette lives in the three blocks below and nowhere else.
+
+   This replaces Verdant's pine green, which read to people as a flag rather
+   than as a grove. The neutrals moved with it: they were green-tinted (the
+   background, the ink, the "them" bubble, the shadows), so recolouring the
+   accent alone would have left everything still faintly green. Amber stays for
+   warnings and red for danger - they have to mean something other than
+   "primary" - and "online" stays green, which is the one place green is a
+   universal signal rather than a brand choice. */
 :root {
-  --bg:#eef1ea; --panel:#fffefb; --panel-2:#f6f8f3; --ink:#1c2a21; --muted:#5d6b62; --faint:#8a978d;
-  --line:#e2e7e1; --accent:#2f6b4f; --accent-ink:#22543d; --accent-soft:#e4efe6; --warm:#b8781f; --plum:#7d5a8c; --online:#2fa36a; --scroll:#c4cec7; --scroll-hover:#a8b5ac;
-  --them:#eef2ea; --them-ink:#26332b; --me:#2f6b4f; --me-ink:#f2f8f3;
+  --bg:#edeef3; --panel:#fffffe; --panel-2:#f5f6fa; --ink:#1d2230; --muted:#5b6377; --faint:#8a90a2;
+  --line:#e1e3ec; --accent:#3a4f8c; --accent-ink:#2a3b6b; --accent-soft:#e6e9f6; --warm:#b8781f; --plum:#7d5a8c; --online:#2fa36a; --scroll:#c5c8d4; --scroll-hover:#a8adbd;
+  --them:#eef0f6; --them-ink:#252a38; --me:#3a4f8c; --me-ink:#f3f5fc;
   --exp:#8a7a4a; --exp-bg:#f0ead9; --danger:#b4442f;
-  --shadow:0 1px 2px rgba(20,40,30,.06), 0 12px 34px rgba(20,40,30,.10);
+  --shadow:0 1px 2px rgba(22,26,42,.06), 0 12px 34px rgba(22,26,42,.10);
   --sans:"Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
   --serif:"Fraunces", Georgia, serif;
   --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
 }
 :root:not([data-theme="light"]) { @media (prefers-color-scheme: dark) {
-  --bg:#0a0f0c; --panel:#141c17; --panel-2:#101713; --ink:#e4ede7; --muted:#9fb0a5; --faint:#7f9186;
-  --line:#233029; --accent:#4c9a74; --accent-ink:#7fd6a8; --accent-soft:#153025; --warm:#c99a63; --plum:#b98fe0; --online:#49c98c; --scroll:#2b3a32; --scroll-hover:#3c5046;
-  --them:#18211c; --them-ink:#d4e0d8; --me:#3c7d5d; --me-ink:#f0f8f2; --exp:#c2ad76; --exp-bg:#241f12; --danger:#e07a63;
+  --bg:#0b0d13; --panel:#151822; --panel-2:#11141d; --ink:#e5e8f1; --muted:#a1a8bc; --faint:#828a9f;
+  --line:#242a39; --accent:#8096dc; --accent-ink:#aabcf2; --accent-soft:#1a2139; --warm:#c99a63; --plum:#b98fe0; --online:#49c98c; --scroll:#2c3243; --scroll-hover:#3d4557;
+  --them:#1a1e29; --them-ink:#d5dae8; --me:#41558f; --me-ink:#f0f3fc; --exp:#c2ad76; --exp-bg:#241f12; --danger:#e07a63;
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 14px 40px rgba(0,0,0,.5);
 }}
 :root[data-theme="dark"] {
-  --bg:#0a0f0c; --panel:#141c17; --panel-2:#101713; --ink:#e4ede7; --muted:#9fb0a5; --faint:#7f9186;
-  --line:#233029; --accent:#4c9a74; --accent-ink:#7fd6a8; --accent-soft:#153025; --warm:#c99a63; --plum:#b98fe0; --online:#49c98c; --scroll:#2b3a32; --scroll-hover:#3c5046;
-  --them:#18211c; --them-ink:#d4e0d8; --me:#3c7d5d; --me-ink:#f0f8f2; --exp:#c2ad76; --exp-bg:#241f12; --danger:#e07a63;
+  --bg:#0b0d13; --panel:#151822; --panel-2:#11141d; --ink:#e5e8f1; --muted:#a1a8bc; --faint:#828a9f;
+  --line:#242a39; --accent:#8096dc; --accent-ink:#aabcf2; --accent-soft:#1a2139; --warm:#c99a63; --plum:#b98fe0; --online:#49c98c; --scroll:#2c3243; --scroll-hover:#3d4557;
+  --them:#1a1e29; --them-ink:#d5dae8; --me:#41558f; --me-ink:#f0f3fc; --exp:#c2ad76; --exp-bg:#241f12; --danger:#e07a63;
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 14px 40px rgba(0,0,0,.5);
 }
 
@@ -88,7 +96,15 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .ri-main { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; }
 .ri-name { display: block; font-size: 14px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .ri-prev { display: block; font-size: 12.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.ri-time { flex: 0 0 auto; align-self: flex-start; margin-top: 2px; font-size: 10.5px; color: var(--faint); font-family: var(--mono); white-space: nowrap; }
+.ri-time { flex: 0 0 auto; font-size: 10.5px; color: var(--faint); font-family: var(--mono); white-space: nowrap; }
+
+/* Unread: the name carries the weight and a count sits where the time is, so a
+   waiting conversation is legible from the shape of the row, not just a tint. */
+.ri-end { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; margin-left: auto; }
+.ritem.unread .ri-name { font-weight: 700; color: var(--ink); }
+.ritem.unread .ri-prev { color: var(--muted); }
+.ri-badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--me-ink); font-size: 10.5px; font-weight: 700; display: grid; place-items: center; }
+
 .empty { margin: auto; text-align: center; color: var(--faint); font-size: 13.5px; padding: 24px; }
 
 .thread { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -108,6 +124,8 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .verified svg { width: 13px; height: 13px; }
 
 .stream { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 9px; min-height: 0; }
+.typing-row { display: flex; align-items: center; gap: 8px; }
+.typing-who { font-size: 11.5px; color: var(--faint); }
 .day { align-self: center; font-size: 10.5px; color: var(--faint); font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; margin: 4px 0; }
 .bubble { max-width: 74%; min-width: 0; padding: 9px 13px; border-radius: 17px; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; word-break: break-word; }
 .them { align-self: flex-start; background: var(--them); color: var(--them-ink); border-bottom-left-radius: 5px; }
@@ -217,7 +235,7 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 .art-scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 26%; background: linear-gradient(to top, rgba(4, 16, 10, .97) 46%, rgba(4, 16, 10, .78) 72%, transparent 100%); }
 .art-brand { position: relative; padding: 36px 46px 0; flex: none; }
 .art-brand .brand { color: #9fe0bd; }
-.art-brand .brand .leaf { color: #4c9a74; }
+.art-brand .brand .leaf { color: var(--accent); }
 .art-copy { position: relative; margin-top: auto; padding: 0 46px 38px; flex: none; }
 .art-copy h2 { margin: 0 0 12px; font-family: var(--serif); font-weight: 600; font-size: 33px; line-height: 1.07; letter-spacing: -.02em; max-width: 15em; }
 .art-copy p { margin: 0; font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #8ea399; }

@@ -46,6 +46,19 @@ interface Props {
   typingNames: string[];
 }
 
+/**
+ * Who is typing, in words. The names were always known here - they came down
+ * the hook and into the row - but only the three dots were ever drawn, with the
+ * name left in an aria-label where no one sees it. In a group that is the whole
+ * question the indicator is meant to answer.
+ */
+function typingPhrase(names: string[]): string {
+  if (names.length === 1) return `${names[0]} is typing`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are typing`;
+  const rest = names.length - 2;
+  return `${names[0]}, ${names[1]} and ${rest} ${rest === 1 ? 'other' : 'others'} are typing`;
+}
+
 /** Track a container's pixel size, so the fixed-size list knows its viewport. */
 function useSize() {
   const ref = useRef<HTMLDivElement>(null);
@@ -83,7 +96,7 @@ export function MessageList({ messages, isGroup, nameOf, typingNames }: Props) {
       lastSender = m.senderId;
     }
     if (typingNames.length > 0) {
-      out.push({ kind: 'typing', key: 'typing', label: typingNames.join(', ') });
+      out.push({ kind: 'typing', key: 'typing', label: typingPhrase(typingNames) });
     }
     return out;
   }, [messages, isGroup, nameOf, typingNames]);
@@ -165,10 +178,12 @@ export function MessageList({ messages, isGroup, nameOf, typingNames }: Props) {
             </div>
           )}
           {row.kind === 'typing' && (
-            <div style={{ display: 'flex' }}>
-              <div className="typing-b" aria-label={`${row.label} typing`}>
+            <div className="typing-row">
+              <div className="typing-b" aria-hidden="true">
                 <span className="dot" /><span className="dot" /><span className="dot" />
               </div>
+              {/* The dots say someone is; the name says who. */}
+              <span className="typing-who" role="status">{row.label}</span>
             </div>
           )}
         </div>

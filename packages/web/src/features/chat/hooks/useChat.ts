@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect } from 'react';
 import { useChatStore, type ChatMessage } from '@/features/chat/store/chatStore.ts';
+import { useAuth } from '@/features/auth/authStore.ts';
 import { markRead, sendText, signalTyping } from '@/features/chat/engine.ts';
 
 const EMPTY: ChatMessage[] = [];
@@ -34,6 +35,12 @@ export function useChat(conversationId: string | null) {
       if (document.visibilityState !== 'visible') return;
       const ids = messages.filter((m) => !m.mine).map((m) => m.id);
       if (ids.length > 0) markRead(conversationId, ids);
+      // The same moment, locally: this thread is open and on screen, so nothing
+      // in it is unread any more. Same condition as the receipt, deliberately -
+      // the roster highlight and the other person's tick should agree.
+      const meId = useAuth.getState().me?.id;
+      const newest = messages[messages.length - 1]?.sentAt;
+      if (meId && newest) useChatStore.getState().markSeen(meId, conversationId, newest);
     };
     report();
     document.addEventListener('visibilitychange', report);

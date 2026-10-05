@@ -29,6 +29,7 @@ import { useRoomStore } from '@/features/rooms/roomStore.ts';
 import { clearAccount, loadAccount, saveAccount, wipe, type StoredAccount } from '@/lib/idb.ts';
 import { arm, clearAll, clearBlob, resume, watchIdle } from '@/features/auth/resume.ts';
 import { forgetPlace } from '@/features/chat/place.ts';
+import { forgetSeen } from '@/features/chat/unread.ts';
 
 export type AuthStatus = 'loading' | 'signedOut' | 'locked' | 'ready';
 
@@ -245,7 +246,7 @@ export const useAuth = create<AuthState>((set, get) => ({
     stopIdle?.();
     stopIdle = null;
     const userId = get().account?.userId;
-    if (userId) forgetPlace(userId);
+    if (userId) { forgetPlace(userId); forgetSeen(userId); }
     await clearAll();
     await wipe();
     await clearAccount();
