@@ -45,7 +45,7 @@ interface Props {
  * holding the size of the group in your head; in a direct chat the state alone
  * is the whole story.
  */
-function receiptLine(message: ChatMessage, isGroup: boolean, otherCount: number): string | null {
+export function receiptLine(message: ChatMessage, isGroup: boolean, otherCount: number): string | null {
   if (!message.mine) return null;
   if (message.status === 'pending') return 'Not sent yet';
   if (!isGroup || otherCount < 1) {
@@ -58,7 +58,7 @@ function receiptLine(message: ChatMessage, isGroup: boolean, otherCount: number)
   // a read tick is a contradiction. Say what is actually known - it was read -
   // rather than a number that is only an artefact of when the counting started.
   if (seen === 0) return message.status === 'read' ? 'Read' : 'Nobody has read it yet';
-  if (seen >= otherCount) return `Read by everyone — all ${otherCount}`;
+  if (seen >= otherCount) return 'Read all';
   return `Read by ${seen} of ${otherCount}`;
 }
 
