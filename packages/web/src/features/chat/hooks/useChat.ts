@@ -9,6 +9,7 @@ import { useCallback, useEffect } from 'react';
 import { useChatStore, type ChatMessage } from '@/features/chat/store/chatStore.ts';
 import { useAuth } from '@/features/auth/authStore.ts';
 import { markRead, sendText, signalTyping } from '@/features/chat/engine.ts';
+import type { Body } from '@/features/chat/body.ts';
 
 const EMPTY: ChatMessage[] = [];
 
@@ -16,9 +17,9 @@ export function useChat(conversationId: string | null) {
   const messages = useChatStore((s) => (conversationId ? s.messages[conversationId] ?? EMPTY : EMPTY));
 
   const send = useCallback(
-    (text: string) => {
+    (text: string, extra?: Omit<Body, 'text'>) => {
       const trimmed = text.trim();
-      if (conversationId && trimmed) void sendText(conversationId, trimmed);
+      if (conversationId && trimmed) void sendText(conversationId, trimmed, extra);
     },
     [conversationId],
   );

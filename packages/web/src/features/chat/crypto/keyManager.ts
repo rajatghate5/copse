@@ -119,6 +119,27 @@ export class KeyManager {
     };
   }
 
+  /**
+   * Seal at a seq we already used, for editing a message we sent. The signature
+   * covers (conversationId, senderId, seq), and an edit is the same message - so
+   * it must re-sign the same context, not take the next seq.
+   */
+  async encryptAt(
+    conversationId: string,
+    senderId: string,
+    seq: number,
+    text: string,
+  ): Promise<{ iv: string; ciphertext: string; signature: string } | null> {
+    const key = this.convKeys.get(conversationId);
+    if (!key) return null;
+    const sealed = await sealMessage(key, this.identity.sigPriv, { conversationId, senderId, seq }, utf8ToBytes(text));
+    return {
+      iv: bytesToBase64(sealed.iv),
+      ciphertext: bytesToBase64(sealed.ciphertext),
+      signature: bytesToBase64(sealed.signature),
+    };
+  }
+
   /** Verify + decrypt an incoming message. Returns null if we can't (no key). */
   async decrypt(
     msg: { conversationId: string; senderId: string; seq: number; iv: string; ciphertext: string; signature: string },

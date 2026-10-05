@@ -46,6 +46,8 @@ interface Props {
   typingNames: string[];
   /** This account's handle, so a mention of you reads differently. */
   myHandle: string;
+  /** Open the actions for one message (reply, forward, edit). */
+  onAct: (message: ChatMessage) => void;
 }
 
 /**
@@ -76,7 +78,7 @@ function useSize() {
   return { ref, ...size };
 }
 
-export function MessageList({ messages, isGroup, nameOf, typingNames, myHandle }: Props) {
+export function MessageList({ messages, isGroup, nameOf, typingNames, myHandle, onAct }: Props) {
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
     let lastDay = '';
@@ -176,7 +178,7 @@ export function MessageList({ messages, isGroup, nameOf, typingNames, myHandle }
           {row.kind === 'day' && <div className="day">{row.label}</div>}
           {row.kind === 'msg' && (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <MessageItem message={row.message} showSender={row.showSender} senderName={row.senderName} myHandle={myHandle} />
+              <MessageItem message={row.message} showSender={row.showSender} senderName={row.senderName} myHandle={myHandle} onAct={onAct} />
             </div>
           )}
           {row.kind === 'typing' && (

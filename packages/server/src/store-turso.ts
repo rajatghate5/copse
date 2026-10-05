@@ -21,6 +21,7 @@ import type {
 } from '@copse/protocol';
 import {
   ADD_MEMBER_SQL,
+  EDIT_MESSAGE_SQL,
   HISTORY_PAGE,
   MIGRATIONS,
   PROMOTE_TO_GROUP_SQL,
@@ -289,7 +290,24 @@ export class TursoStore implements Store {
       sql: 'INSERT INTO messages (id, conversation_id, sender_id, seq, iv, ciphertext, signature, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       args: [id, m.conversationId, m.senderId, m.seq, m.iv, m.ciphertext, m.signature, sentAt],
     });
-    return { id, ...m, sentAt, deliveredAt: null, readAt: null };
+    return { id, ...m, sentAt, deliveredAt: null, readAt: null, editedAt: null };
+  }
+
+  async editMessage(
+    messageId: string,
+    senderId: string,
+    body: { iv: string; ciphertext: string; signature: string },
+    at: number,
+  ): Promise<WireMessage | null> {
+    const res = await this.db.execute({
+      sql: EDIT_MESSAGE_SQL,
+      args: [body.iv, body.ciphertext, body.signature, at, messageId, senderId],
+    });
+    // No row changed means no such message, or not this author's.
+    if (res.rowsAffected === 0) return null;
+    const r = await this.db.execute({ sql: 'SELECT * FROM messages WHERE id = ?', args: [messageId] });
+    const row = r.rows[0] as any;
+    return row ? rowToMessage(row) : null;
   }
 
   async markDelivered(messageIds: string[], at: number): Promise<void> {

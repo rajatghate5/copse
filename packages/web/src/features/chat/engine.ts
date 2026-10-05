@@ -16,6 +16,7 @@ import { SocketService } from '@/features/chat/services/socket.ts';
 import { dequeue, enqueue, pending } from '@/lib/idb.ts';
 import { notifyMessage } from '@/features/chat/notify.ts';
 import { mentions } from '@/features/chat/mentions.ts';
+import { decodeBody, encodeBody, type Body } from '@/features/chat/body.ts';
 import { lastConversation, rememberConversation, rememberRoom } from '@/features/chat/place.ts';
 import { loadSeen } from '@/features/chat/unread.ts';
 
@@ -111,20 +112,34 @@ async function handleFrame(msg: ServerMessage): Promise<void> {
         // Our own message echoed back: reconcile the optimistic bubble.
         const list = store.messages[wire.conversationId] ?? [];
         const opt = list.find((m) => m.mine && m.seq === wire.seq && m.status === 'pending');
-        const text = opt?.text ?? (await tryDecrypt(wire, me.keys.sigPub)) ?? '';
+        const text = opt?.text ?? decodeBody((await tryDecrypt(wire, me.keys.sigPub)) ?? '').text;
         if (opt) await dequeue(opt.id);
         store.reconcile(wire, text);
         return;
       }
       const sender = store.users[wire.senderId];
       if (!sender) return;
-      const text = await tryDecrypt(wire, sender.keys.sigPub);
-      if (text === null) return; // no key yet; history will bring it after 'key'
-      store.addMessage(toMessage(wire, text, false));
+      const plaintext = await tryDecrypt(wire, sender.keys.sigPub);
+      if (plaintext === null) return; // no key yet; history will bring it after 'key'
+      const body = decodeBody(plaintext);
+      store.addMessage(toMessage(wire, body, false));
       // After the message is in the store, so clicking through finds it there.
       // The mention is found here, on the decrypted text: the server cannot see
       // who was named and so could never have told anyone.
-      notifyMessage(sender.displayName, wire.conversationId, mentions(text, me.username));
+      notifyMessage(sender.displayName, wire.conversationId, mentions(body.text, me.username));
+      return;
+    }
+
+    case 'edited': {
+      const wire = msg.message;
+      const sender = store.users[wire.senderId];
+      const sigPub = wire.senderId === me.id ? me.keys.sigPub : sender?.keys.sigPub;
+      if (!sigPub) return;
+      const plaintext = await tryDecrypt(wire, sigPub);
+      // A body that will not open is left as it was: better the old text than a
+      // blank bubble, and the signature is what refused it.
+      if (plaintext === null) return;
+      store.applyEdit(wire.conversationId, wire.id, decodeBody(plaintext).text, wire.editedAt ?? Date.now());
       return;
     }
 
@@ -134,8 +149,8 @@ async function handleFrame(msg: ServerMessage): Promise<void> {
         const sender = store.users[wire.senderId];
         const sigPub = wire.senderId === me.id ? me.keys.sigPub : sender?.keys.sigPub;
         if (!sigPub) continue;
-        const text = await tryDecrypt(wire, sigPub);
-        if (text !== null) decrypted.push(toMessage(wire, text, wire.senderId === me.id));
+        const plaintext = await tryDecrypt(wire, sigPub);
+        if (plaintext !== null) decrypted.push(toMessage(wire, decodeBody(plaintext), wire.senderId === me.id));
       }
       store.prependHistory(msg.conversationId, decrypted);
       return;
@@ -162,7 +177,7 @@ async function handleFrame(msg: ServerMessage): Promise<void> {
 
 function toMessage(
   wire: WireMessage,
-  text: string,
+  body: Body,
   mine: boolean,
 ): ChatMessage {
   return {
@@ -171,8 +186,11 @@ function toMessage(
     senderId: wire.senderId,
     seq: wire.seq,
     sentAt: wire.sentAt,
+    editedAt: wire.editedAt,
     mine,
-    text,
+    text: body.text,
+    quote: body.quote,
+    forwardedFrom: body.forwardedFrom,
     status: statusOf(wire),
   };
 }
@@ -190,11 +208,18 @@ async function tryDecrypt(
   }
 }
 
-/** Seal, optimistically show, persist to the outbox, and send one message. */
-export async function sendText(conversationId: string, text: string): Promise<void> {
+/**
+ * Seal, optimistically show, persist to the outbox, and send one message.
+ *
+ * `body` may carry a quoted reply or a forward attribution; both are sealed
+ * inside the ciphertext, so sending one is an ordinary send as far as the server
+ * is concerned - it never learns that this message answers that one.
+ */
+export async function sendText(conversationId: string, text: string, extra?: Omit<Body, 'text'>): Promise<void> {
   const { km, me } = useAuth.getState();
   if (!km || !me) return;
-  const enc = await km.encrypt(conversationId, me.id, text);
+  const body: Body = { text, ...extra };
+  const enc = await km.encrypt(conversationId, me.id, encodeBody(body));
   if (!enc) return; // no conversation key yet
 
   const clientId = crypto.randomUUID();
@@ -206,10 +231,14 @@ export async function sendText(conversationId: string, text: string): Promise<vo
     sentAt: Date.now(),
     mine: true,
     text,
+    quote: body.quote,
+    forwardedFrom: body.forwardedFrom,
     status: 'pending',
   };
   useChatStore.getState().addOptimistic(optimistic);
-  await enqueue({ clientId, conversationId, seq: enc.seq, iv: enc.iv, ciphertext: enc.ciphertext, signature: enc.signature, plaintext: text, createdAt: Date.now() });
+  // The outbox keeps the encoded body, so a resend is byte-identical to what
+  // was sealed; flushOutbox decodes it again to redraw the bubble.
+  await enqueue({ clientId, conversationId, seq: enc.seq, iv: enc.iv, ciphertext: enc.ciphertext, signature: enc.signature, plaintext: encodeBody(body), createdAt: Date.now() });
   socket.send({ t: 'send', conversationId, seq: enc.seq, iv: enc.iv, ciphertext: enc.ciphertext, signature: enc.signature });
 }
 
@@ -223,6 +252,50 @@ export function openConversation(conversationId: string): void {
   const me = useAuth.getState().me;
   const roomId = useRoomStore.getState().currentRoomId;
   if (me && roomId) rememberConversation(me.id, roomId, conversationId);
+}
+
+/**
+ * Replace the text of a message we sent. Sealed here at the original seq, since
+ * that is what the signature covers; the server checks only that the message is
+ * ours, and still cannot read either version.
+ *
+ * The local message is updated when the server's `edited` frame comes back
+ * rather than optimistically: an edit that is refused should leave what everyone
+ * else can still see.
+ */
+export async function editText(conversationId: string, messageId: string, seq: number, text: string): Promise<void> {
+  const { km, me } = useAuth.getState();
+  if (!km || !me) return;
+  const existing = (useChatStore.getState().messages[conversationId] ?? []).find((m) => m.id === messageId);
+  if (!existing) return;
+  // Keep whatever the message already carried - editing the words of a reply
+  // must not silently drop what it was replying to.
+  const enc = await km.encryptAt(conversationId, me.id, seq, encodeBody({
+    text,
+    quote: existing.quote,
+    forwardedFrom: existing.forwardedFrom,
+  }));
+  if (!enc) return;
+  socket.send({ t: 'edit', conversationId, messageId, iv: enc.iv, ciphertext: enc.ciphertext, signature: enc.signature });
+}
+
+/**
+ * Send one message into another conversation, attributed to whoever wrote it.
+ *
+ * It is a new message, not a moved one: it is sealed with the target
+ * conversation's key, by us, so it carries our name as the sender and the
+ * original author's as the attribution. It cannot inherit the original's ticks,
+ * because those were about a different audience.
+ */
+export async function forwardText(toConversationId: string, message: ChatMessage): Promise<void> {
+  const users = useChatStore.getState().users;
+  const me = useAuth.getState().me;
+  if (!me) return;
+  // Whoever it was already attributed to, if this is a forward of a forward -
+  // otherwise the person who wrote it.
+  const origin = message.forwardedFrom
+    ?? (message.mine ? me.displayName : users[message.senderId]?.displayName ?? 'someone');
+  await sendText(toConversationId, message.text, { forwardedFrom: origin });
 }
 
 /** Create a direct or group conversation with the given other members. */
@@ -271,9 +344,11 @@ async function flushOutbox(): Promise<void> {
     // Re-show it if this is a fresh session that lost the optimistic bubble.
     const known = (store.messages[item.conversationId] ?? []).some((m) => m.id === item.clientId || (m.mine && m.seq === item.seq));
     if (!known) {
+      const body = decodeBody(item.plaintext);
       store.addOptimistic({
         id: item.clientId, conversationId: item.conversationId, senderId: useAuth.getState().me!.id,
-        seq: item.seq, sentAt: item.createdAt, mine: true, text: item.plaintext, status: 'pending',
+        seq: item.seq, sentAt: item.createdAt, mine: true, text: body.text,
+        quote: body.quote, forwardedFrom: body.forwardedFrom, status: 'pending',
       });
     }
     socket.send({ t: 'send', conversationId: item.conversationId, seq: item.seq, iv: item.iv, ciphertext: item.ciphertext, signature: item.signature });

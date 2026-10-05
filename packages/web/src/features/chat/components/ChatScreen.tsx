@@ -4,18 +4,19 @@
  * flows from the store and the engine.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { UserSummary } from '@copse/protocol';
-import { useChatStore } from '@/features/chat/store/chatStore.ts';
+import { useChatStore, type ChatMessage } from '@/features/chat/store/chatStore.ts';
 import { useAuth } from '@/features/auth/authStore.ts';
 import { useRoomStore } from '@/features/rooms/roomStore.ts';
-import { openConversation as openAndRemember } from '@/features/chat/engine.ts';
+import { openConversation as openAndRemember, editText } from '@/features/chat/engine.ts';
 import { lastConversation } from '@/features/chat/place.ts';
 import { useSocket } from '@/features/chat/hooks/useSocket.ts';
 import { useChat } from '@/features/chat/hooks/useChat.ts';
 import { useTypingIndicator } from '@/features/chat/hooks/useTypingIndicator.ts';
 import { useUnreadTitle } from '@/features/chat/hooks/useUnreadTitle.ts';
 import { conversationName, conversationSubtitle, otherMemberIds } from '@/features/chat/selectors.ts';
+import { quoteOf, type Quote } from '@/features/chat/body.ts';
 import { Avatar } from '@/features/chat/components/Avatar.tsx';
 import { MessageList } from '@/features/chat/components/MessageList.tsx';
 import { Composer } from '@/features/chat/components/Composer.tsx';
@@ -23,6 +24,8 @@ import { ConversationList } from '@/features/chat/components/ConversationList.ts
 import { SafetyNumberSheet } from '@/features/chat/components/SafetyNumberSheet.tsx';
 import { NewConversationDialog } from '@/features/chat/components/NewConversationDialog.tsx';
 import { AddMembersDialog } from '@/features/chat/components/AddMembersDialog.tsx';
+import { MessageActions } from '@/features/chat/components/MessageActions.tsx';
+import { ForwardDialog } from '@/features/chat/components/ForwardDialog.tsx';
 import { RoomSwitcher } from '@/features/rooms/RoomSwitcher.tsx';
 import { ProfilePanel } from '@/features/profile/ProfilePanel.tsx';
 import { Brand, ThemeToggle } from '@/components/common.tsx';
@@ -48,6 +51,12 @@ export function ChatScreen() {
   const [showSafety, setShowSafety] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  // One message at a time: which one's actions are open, what we are replying
+  // to, what we are editing, and what we are forwarding.
+  const [acting, setActing] = useState<ChatMessage | null>(null);
+  const [replyTo, setReplyTo] = useState<Quote | null>(null);
+  const [editing, setEditing] = useState<{ id: string; seq: number; text: string } | null>(null);
+  const [forwarding, setForwarding] = useState<ChatMessage | null>(null);
 
   const active = activeId ? conversations[activeId] : undefined;
   const { messages, send, notifyTyping } = useChat(activeId);
@@ -67,6 +76,36 @@ export function ChatScreen() {
   const openConversation = (id: string) => {
     openAndRemember(id);
     setView('thread');
+    // Drafts belong to the thread they were started in.
+    setReplyTo(null);
+    setEditing(null);
+  };
+
+  // Stable, so a new message does not re-render every bubble (MessageItem is
+  // memoised and this is one of its props).
+  const onAct = useCallback((message: ChatMessage) => setActing(message), []);
+
+  const startReply = (m: ChatMessage) => {
+    setReplyTo(quoteOf(m.id, m.mine ? 'You' : nameOf(m.senderId), m.text));
+    setEditing(null);
+    setActing(null);
+  };
+
+  const startEdit = (m: ChatMessage) => {
+    setEditing({ id: m.id, seq: m.seq, text: m.text });
+    setReplyTo(null);
+    setActing(null);
+  };
+
+  /** Enter in the composer: either save the edit, or send a new message. */
+  const submit = (text: string) => {
+    if (editing) {
+      if (text.trim() && text !== editing.text) void editText(active!.id, editing.id, editing.seq, text);
+      setEditing(null);
+      return;
+    }
+    send(text, replyTo ? { quote: replyTo } : undefined);
+    setReplyTo(null);
   };
 
   /**
@@ -128,7 +167,7 @@ export function ChatScreen() {
                 {/* Keyed by conversation: the list caches measured row heights
                     and whether the reader is at the end, and neither means
                     anything in a different thread. */}
-                <MessageList key={active.id} messages={messages} isGroup={active.kind === 'group'} nameOf={nameOf} typingNames={typingNames} myHandle={me.username} />
+                <MessageList key={active.id} messages={messages} isGroup={active.kind === 'group'} nameOf={nameOf} typingNames={typingNames} myHandle={me.username} onAct={onAct} />
 
                 {connection !== 'online' && (
                   <div className={`conn-banner ${connection === 'connecting' ? 'waking' : 'reconnecting'}`}>
@@ -137,9 +176,16 @@ export function ChatScreen() {
                 )}
                 <div className="lock-strip"><Lock /> End-to-end encrypted · disappears after 7 days</div>
                 <Composer
+                  // Remounted when edit mode changes, so the draft is the
+                  // message being edited without an effect to copy it in.
+                  key={editing ? `edit:${editing.id}` : 'new'}
                   peerName={title}
                   members={members}
-                  onSend={send}
+                  initialText={editing?.text ?? ''}
+                  editing={Boolean(editing)}
+                  replyTo={replyTo}
+                  onCancel={() => { setEditing(null); setReplyTo(null); }}
+                  onSend={submit}
                   onTyping={notifyTyping}
                 />
               </>
@@ -158,6 +204,17 @@ export function ChatScreen() {
 
       {showNew && <NewConversationDialog onClose={() => setShowNew(false)} />}
       {showAdd && active && <AddMembersDialog conversation={active} onClose={() => setShowAdd(false)} />}
+      {acting && (
+        <MessageActions
+          message={acting}
+          canForward={Object.keys(conversations).length > 1}
+          onReply={() => startReply(acting)}
+          onForward={() => { setForwarding(acting); setActing(null); }}
+          onEdit={() => startEdit(acting)}
+          onClose={() => setActing(null)}
+        />
+      )}
+      {forwarding && <ForwardDialog message={forwarding} onClose={() => setForwarding(null)} />}
       {showProfile && <ProfilePanel onClose={() => setShowProfile(false)} />}
       {showSafety && otherUser && <SafetyNumberSheet other={otherUser} onClose={() => setShowSafety(false)} />}
     </div>

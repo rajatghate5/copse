@@ -13,6 +13,7 @@
 import { create } from 'zustand';
 import type { ConversationSummary, UserSummary, WireMessage } from '@copse/protocol';
 import { saveSeen, type Watermarks } from '@/features/chat/unread.ts';
+import type { Quote } from '@/features/chat/body.ts';
 
 export type Delivery = 'pending' | 'sent' | 'delivered' | 'read';
 
@@ -35,9 +36,15 @@ export interface ChatMessage {
   senderId: string;
   seq: number;
   sentAt: number;
+  /** When the author last changed it, or null/absent if never. */
+  editedAt?: number | null;
   mine: boolean;
   text: string;
   status: Delivery;
+  /** The message this one answers, carried inside the ciphertext. */
+  quote?: Quote;
+  /** Who wrote it originally, when this message was forwarded. */
+  forwardedFrom?: string;
   /** Set while an unreadable message waits for its key. */
   locked?: boolean;
 }
@@ -71,6 +78,8 @@ interface ChatState {
   setTyping: (conversationId: string, userId: string, typing: boolean) => void;
   setOnline: (userIds: string[]) => void;
   applyReceipt: (messageIds: string[], kind: 'delivered' | 'read') => void;
+  /** Replace one message's text after its author edited it. */
+  applyEdit: (conversationId: string, messageId: string, text: string, editedAt: number) => void;
   setActive: (id: string | null) => void;
   /** Replace the watermarks wholesale, from this device's storage on connect. */
   hydrateSeen: (seen: Watermarks) => void;
@@ -167,6 +176,18 @@ export const useChatStore = create<ChatState>((set) => ({
       const cur = new Set(s.typing[conversationId] ?? []);
       if (typing) cur.add(userId); else cur.delete(userId);
       return { typing: { ...s.typing, [conversationId]: [...cur] } };
+    }),
+
+  applyEdit: (conversationId, messageId, text, editedAt) =>
+    set((s) => {
+      const list = s.messages[conversationId];
+      if (!list?.some((m) => m.id === messageId)) return s;
+      return {
+        messages: {
+          ...s.messages,
+          [conversationId]: list.map((m) => (m.id === messageId ? { ...m, text, editedAt } : m)),
+        },
+      };
     }),
 
   setActive: (activeId) => set({ activeId }),

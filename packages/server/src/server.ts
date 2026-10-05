@@ -454,6 +454,36 @@ export function createServer(opts: ServerOptions): CopseServer {
         return;
       }
 
+      case 'edit': {
+        // Membership first, so a stranger cannot even learn whether an id
+        // exists; authorship second, which is the real gate.
+        if (!(await store.isMember(msg.conversationId, me))) {
+          return send(ws, { t: 'error', code: 'not_a_member', message: 'not a member' });
+        }
+        const iv = cleanB64(msg.iv, KEY_B64_MAX);
+        const ciphertext = cleanB64(msg.ciphertext, MAX_CIPHERTEXT_LENGTH);
+        const signature = cleanB64(msg.signature, KEY_B64_MAX);
+        if (!iv || !ciphertext || !signature || typeof msg.messageId !== 'string') {
+          return send(ws, { t: 'error', code: 'bad_message', message: 'bad message body' });
+        }
+        const [existing] = await store.messagesByIds([msg.messageId]);
+        if (!existing || existing.conversationId !== msg.conversationId) {
+          return send(ws, { t: 'error', code: 'bad_message', message: 'no such message here' });
+        }
+        if (existing.senderId !== me) {
+          return send(ws, { t: 'error', code: 'not_your_message', message: 'not your message' });
+        }
+        const updated = await store.editMessage(msg.messageId, me, { iv, ciphertext, signature }, Date.now());
+        if (!updated) {
+          return send(ws, { t: 'error', code: 'not_your_message', message: 'not your message' });
+        }
+        // Everyone who has the message gets the new body, the author included:
+        // their other devices are showing the old one.
+        const memberIds = await store.memberIds(msg.conversationId);
+        hub.sendMany(memberIds, room, { t: 'edited', message: updated });
+        return;
+      }
+
       case 'history': {
         if (!(await store.isMember(msg.conversationId, me))) {
           return send(ws, { t: 'error', code: 'not_a_member', message: 'not a member' });

@@ -19,6 +19,7 @@ import type {
 } from '@copse/protocol';
 import {
   ADD_MEMBER_SQL,
+  EDIT_MESSAGE_SQL,
   HISTORY_PAGE,
   MIGRATIONS,
   PROMOTE_TO_GROUP_SQL,
@@ -276,7 +277,22 @@ export class SqliteStore implements Store {
         'INSERT INTO messages (id, conversation_id, sender_id, seq, iv, ciphertext, signature, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .run(id, m.conversationId, m.senderId, m.seq, m.iv, m.ciphertext, m.signature, sentAt);
-    return { id, ...m, sentAt, deliveredAt: null, readAt: null };
+    return { id, ...m, sentAt, deliveredAt: null, readAt: null, editedAt: null };
+  }
+
+  async editMessage(
+    messageId: string,
+    senderId: string,
+    body: { iv: string; ciphertext: string; signature: string },
+    at: number,
+  ): Promise<WireMessage | null> {
+    const res = this.db
+      .query(EDIT_MESSAGE_SQL)
+      .run(body.iv, body.ciphertext, body.signature, at, messageId, senderId);
+    // No row changed means no such message, or not this author's.
+    if (res.changes === 0) return null;
+    const row = this.db.query('SELECT * FROM messages WHERE id = ?').get(messageId) as any;
+    return row ? rowToMessage(row) : null;
   }
 
   async markDelivered(messageIds: string[], at: number): Promise<void> {

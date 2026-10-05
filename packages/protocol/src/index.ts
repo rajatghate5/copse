@@ -165,6 +165,11 @@ export interface WireMessage {
   readonly signature: string;
   /** Server-stamped receipt time. Clients are not trusted with the clock. */
   readonly sentAt: number;
+  /**
+   * When the author last replaced the body, or null. The server stamps it and
+   * swaps the ciphertext; it still cannot read either version.
+   */
+  readonly editedAt: number | null;
   /** When another member first received it, or null. Server-stamped. */
   readonly deliveredAt: number | null;
   /** When another member first read it, or null. Server-stamped. */
@@ -208,6 +213,21 @@ export type ClientMessage =
    * hold), so the client states it rather than implying otherwise.
    */
   | { t: 'addMembers'; conversationId: string; members: MemberKey[] }
+  /**
+   * Replace the body of one of your own messages. The seq is not resent: it is
+   * part of what the original signature covers, so an edit re-signs the same
+   * (conversation, sender, seq) and the server keeps the row it already has.
+   * The server checks only that the message is yours; it cannot compare the two
+   * versions, because it can read neither.
+   */
+  | {
+      t: 'edit';
+      conversationId: string;
+      messageId: string;
+      iv: string;
+      ciphertext: string;
+      signature: string;
+    }
   /** Ask for a page of history, older than `before` (a message id) if given. */
   | { t: 'history'; conversationId: string; before?: string }
   /** Fire-and-forget typing indicator. Never stored. */
@@ -244,6 +264,8 @@ export type ServerMessage =
   /** A wrapped conversation key addressed to the receiving client. */
   | { t: 'key'; conversationId: string; wrappedKey: string }
   | { t: 'message'; message: WireMessage }
+  /** A message whose author replaced its body. Same id, new ciphertext. */
+  | { t: 'edited'; message: WireMessage }
   /** A page of history, oldest-first, in response to a `history` request. */
   | { t: 'history'; conversationId: string; messages: WireMessage[]; done: boolean }
   | { t: 'typing'; state: TypingState }
@@ -269,6 +291,7 @@ export type ErrorCode =
   | 'not_a_member'
   | 'not_a_room_member'
   | 'no_such_conversation'
+  | 'not_your_message'
   | 'rate_limited'
   | 'too_large';
 

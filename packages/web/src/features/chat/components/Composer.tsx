@@ -14,7 +14,9 @@
 import { useRef, useState } from 'react';
 import type { UserSummary } from '@copse/protocol';
 import { pendingHandle } from '@/features/chat/mentions.ts';
+import type { Quote } from '@/features/chat/body.ts';
 import { Arrow } from '@/assets/svgs/arrow/index.tsx';
+import { Check } from '@/assets/svgs/check/index.tsx';
 import { Smile } from '@/assets/svgs/smile/index.tsx';
 import { EmojiPicker } from '@/features/chat/components/EmojiPicker.tsx';
 
@@ -22,12 +24,20 @@ interface Props {
   peerName: string;
   /** The others in this conversation, for @ completion. */
   members: UserSummary[];
+  /** The draft to start from - the message being edited, or nothing. */
+  initialText?: string;
+  /** Editing an existing message rather than writing a new one. */
+  editing?: boolean;
+  /** The message this draft will answer, shown above the input. */
+  replyTo?: Quote | null;
+  /** Leave edit mode, or drop the reply. */
+  onCancel?: () => void;
   onSend: (text: string) => void;
   onTyping: () => void;
 }
 
-export function Composer({ peerName, members, onSend, onTyping }: Props) {
-  const [text, setText] = useState('');
+export function Composer({ peerName, members, initialText = '', editing = false, replyTo, onCancel, onSend, onTyping }: Props) {
+  const [text, setText] = useState(initialText);
   const [emoji, setEmoji] = useState(false);
   const [pick, setPick] = useState(0);
   const input = useRef<HTMLInputElement>(null);
@@ -76,6 +86,13 @@ export function Composer({ peerName, members, onSend, onTyping }: Props) {
 
   return (
     <div className="composer">
+      {(editing || replyTo) && (
+        <div className="draft-strip">
+          <span className="ds-kind">{editing ? 'Editing' : `Replying to ${replyTo!.by}`}</span>
+          {!editing && <span className="ds-text">{replyTo!.text}</span>}
+          <button type="button" className="ds-x" aria-label="Cancel" onClick={onCancel}>×</button>
+        </div>
+      )}
       {open && (
         <div className="mention-pop" role="listbox" aria-label="Mention someone">
           {matches.map((m, i) => (
@@ -145,11 +162,12 @@ export function Composer({ peerName, members, onSend, onTyping }: Props) {
             }
             if (e.key === 'Escape') { e.preventDefault(); return setDismissed(true); }
           }
+          if (e.key === 'Escape' && (editing || replyTo)) { e.preventDefault(); return onCancel?.(); }
           if (e.key === 'Enter') submit();
         }}
       />
-      <button className="send" aria-label="Send" disabled={!text.trim()} onClick={submit}>
-        <Arrow />
+      <button className="send" aria-label={editing ? 'Save' : 'Send'} disabled={!text.trim()} onClick={submit}>
+        {editing ? <Check /> : <Arrow />}
       </button>
     </div>
   );

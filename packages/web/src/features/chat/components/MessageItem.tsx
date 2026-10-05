@@ -18,6 +18,8 @@ interface Props {
   senderName: string;
   /** This account's handle, so a mention of you can be marked as yours. */
   myHandle: string;
+  /** Open the actions for this message (reply, forward, edit). */
+  onAct?: (message: ChatMessage) => void;
 }
 
 /**
@@ -42,17 +44,40 @@ function Body({ text, myHandle }: { text: string; myHandle: string }) {
   );
 }
 
-function MessageItemBase({ message, showSender, senderName, myHandle }: Props) {
+function MessageItemBase({ message, showSender, senderName, myHandle, onAct }: Props) {
   const expiry = expiryLabel(message.sentAt);
   return (
     <div className={`bubble ${message.mine ? 'me' : 'them'}`}>
       {showSender && !message.mine && <div className="sender">{senderName}</div>}
+      {message.forwardedFrom && (
+        <div className="fwd">Forwarded from {message.forwardedFrom}</div>
+      )}
+      {message.quote && (
+        // The quoted snippet travels inside the message, so it still shows when
+        // the original has expired or was sent before you joined.
+        <div className="quote">
+          <span className="q-by">{message.quote.by}</span>
+          <span className="q-text">{message.quote.text}</span>
+        </div>
+      )}
       <span className="t"><Body text={message.text} myHandle={myHandle} /></span>
       <div className="meta">
         <span className="ts">{messageTime(message.sentAt)}</span>
+        {/* Said plainly rather than hidden: the others saw the first version. */}
+        {message.editedAt ? <span className="edited">edited</span> : null}
         {expiry && <span className="exp">{expiry}</span>}
         {message.mine && <Ticks status={message.status} />}
       </div>
+      {onAct && (
+        <button
+          type="button"
+          className="b-act"
+          aria-label="Message actions"
+          onClick={() => onAct(message)}
+        >
+          ⋯
+        </button>
+      )}
     </div>
   );
 }

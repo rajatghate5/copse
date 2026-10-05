@@ -143,6 +143,39 @@ label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .02em
 @keyframes typedot { 0%, 60%, 100% { transform: translateY(0); opacity: .35; } 30% { transform: translateY(-4px); opacity: .9; } }
 @media (prefers-reduced-motion: reduce) { .typing-b .dot { animation: none; } }
 
+/* A message's own controls and the things it can carry. */
+.bubble { position: relative; }
+.b-act { position: absolute; top: 2px; right: 6px; width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: var(--faint); font-size: 15px; line-height: 1; opacity: 0; transition: opacity .12s; }
+.bubble:hover .b-act, .b-act:focus-visible { opacity: 1; }
+.bubble.me .b-act { color: color-mix(in srgb, var(--me-ink) 70%, transparent); }
+/* No hover on a touch screen, so the control is simply always there. */
+@media (hover: none) { .b-act { opacity: .7; } }
+
+.fwd { font-size: 11px; font-style: italic; color: var(--faint); margin-bottom: 3px; }
+.bubble.me .fwd { color: color-mix(in srgb, var(--me-ink) 72%, transparent); }
+.quote { display: flex; flex-direction: column; gap: 1px; border-left: 2.5px solid var(--accent); padding: 4px 8px; margin-bottom: 5px; border-radius: 0 7px 7px 0; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.bubble.me .quote { border-left-color: var(--me-ink); background: color-mix(in srgb, var(--me-ink) 14%, transparent); }
+.q-by { font-size: 11px; font-weight: 700; color: var(--accent-ink); }
+.bubble.me .q-by { color: var(--me-ink); }
+.q-text { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.bubble.me .q-text { color: color-mix(in srgb, var(--me-ink) 80%, transparent); }
+.edited { font-size: 10px; font-style: italic; opacity: .75; }
+
+/* The actions sheet, and the strip the composer shows while a draft is tied to
+   another message. */
+.sheet.acts { max-width: 380px; }
+.act-preview { font-size: 13px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; margin-bottom: 12px; max-height: 76px; overflow: hidden; }
+.act { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 11px 13px; margin-bottom: 7px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel-2); color: var(--ink); font-size: 14px; font-weight: 600; text-align: left; }
+.act:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-ink); }
+.act:disabled { opacity: .5; }
+.act-note { font-size: 11.5px; font-weight: 400; color: var(--faint); }
+
+.draft-strip { position: absolute; bottom: calc(100% - 1px); left: 0; right: 0; display: flex; align-items: center; gap: 9px; padding: 8px 14px; background: var(--panel-2); border-top: 1px solid var(--line); }
+.ds-kind { font-size: 11.5px; font-weight: 700; color: var(--accent-ink); flex: none; }
+.ds-text { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-x { margin-left: auto; flex: none; width: 24px; height: 24px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 17px; line-height: 1; }
+.ds-x:hover { color: var(--ink); background: var(--panel); }
+
 /* The composer grows two layers: an emoji grid and an @ completion list. Both
    are anchored to the composer and open upwards, because it sits at the bottom
    of the thread and a popup below it would be off screen. */

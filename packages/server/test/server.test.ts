@@ -614,6 +614,93 @@ function runSuite(name: string, makeStore: () => Store) {
       await rm(dir, { recursive: true, force: true });
     });
 
+    test('only the author can replace a message body, and the edit is stamped', async () => {
+      const h = await startServer(makeStore());
+      servers.push(h.server);
+
+      const alice = identityFromMnemonic(generateMnemonicPhrase());
+      const bob = identityFromMnemonic(generateMnemonicPhrase());
+      const { userId: aliceId, roomId } = await bootstrapRoom(h.base, 'alice', alice);
+      const aliceCookie = await login(h.base, 'alice', alice);
+      const code = await firstRoomCode(h.base, aliceCookie);
+      const { userId: bobId } = await joinRoom(h.base, 'bob', bob, code);
+      const bobCookie = await login(h.base, 'bob', bob);
+
+      const a = openSocket(h.base, aliceCookie, roomId);
+      const b = openSocket(h.base, bobCookie, roomId);
+      const aReady = (await waitFor(() => a.frames.find((f) => f.t === 'ready'))) as Extract<ServerMessage, { t: 'ready' }>;
+      await waitFor(() => b.frames.find((f) => f.t === 'ready'));
+      const bobSummary = aReady.users.find((u: UserSummary) => u.id === bobId)!;
+
+      const convKey = generateConversationKey();
+      a.ws.send(JSON.stringify({
+        t: 'createConversation', kind: 'direct', titleCiphertext: null,
+        members: [
+          { userId: aliceId, wrappedKey: packWrappedKey(await wrapKeyFor(convKey, alice.encPub)) },
+          { userId: bobId, wrappedKey: packWrappedKey(await wrapKeyFor(convKey, base64ToBytes(bobSummary.keys.encPub))) },
+        ],
+      }));
+      const made = (await waitFor(() => b.frames.find((f) => f.t === 'conversation'))) as Extract<ServerMessage, { t: 'conversation' }>;
+      const conversationId = made.conversation.id;
+
+      const first = await sealMessage(convKey, alice.sigPriv, { conversationId, senderId: aliceId, seq: 1 }, utf8ToBytes('see you at six'));
+      a.ws.send(JSON.stringify({
+        t: 'send', conversationId, seq: 1,
+        iv: bytesToBase64(first.iv), ciphertext: bytesToBase64(first.ciphertext), signature: bytesToBase64(first.signature),
+      }));
+      const arrived = (await waitFor(() => b.frames.find((f) => f.t === 'message'))) as Extract<ServerMessage, { t: 'message' }>;
+      const messageId = arrived.message.id;
+      expect(arrived.message.editedAt).toBeNull();
+
+      // Bob cannot rewrite what Alice said, even though he can read it.
+      const forgery = await sealMessage(convKey, bob.sigPriv, { conversationId, senderId: bobId, seq: 1 }, utf8ToBytes('see you at nine'));
+      b.ws.send(JSON.stringify({
+        t: 'edit', conversationId, messageId,
+        iv: bytesToBase64(forgery.iv), ciphertext: bytesToBase64(forgery.ciphertext), signature: bytesToBase64(forgery.signature),
+      }));
+      const refused = (await waitFor(() => b.frames.find((f) => f.t === 'error'))) as Extract<ServerMessage, { t: 'error' }>;
+      expect(refused.code).toBe('not_your_message');
+      const untouched = await h.store.history(conversationId, undefined);
+      expect(untouched[0]!.ciphertext).toBe(bytesToBase64(first.ciphertext));
+      expect(untouched[0]!.editedAt).toBeNull();
+
+      // Alice can, re-signing the same (conversation, sender, seq).
+      const second = await sealMessage(convKey, alice.sigPriv, { conversationId, senderId: aliceId, seq: 1 }, utf8ToBytes('see you at seven'));
+      a.ws.send(JSON.stringify({
+        t: 'edit', conversationId, messageId,
+        iv: bytesToBase64(second.iv), ciphertext: bytesToBase64(second.ciphertext), signature: bytesToBase64(second.signature),
+      }));
+
+      const edited = (await waitFor(() => b.frames.find((f) => f.t === 'edited'))) as Extract<ServerMessage, { t: 'edited' }>;
+      expect(edited.message.id).toBe(messageId);
+      expect(edited.message.seq).toBe(1);
+      expect(edited.message.editedAt).toBeGreaterThan(0);
+      // Still only ciphertext on the wire, and it is the new one.
+      expect(edited.message.ciphertext).toBe(bytesToBase64(second.ciphertext));
+      expect(JSON.stringify(edited.message)).not.toContain('seven');
+
+      // It opens to the new text with the same signature context as before.
+      const opened = await openMessage(
+        convKey,
+        base64ToBytes(aReady.you.keys.sigPub),
+        { conversationId, senderId: aliceId, seq: 1 },
+        { iv: second.iv, ciphertext: second.ciphertext, signature: second.signature },
+      );
+      expect(bytesToUtf8(opened)).toBe('see you at seven');
+
+      // One message, not two, and the edit is in storage.
+      const after = await h.store.history(conversationId, undefined);
+      expect(after).toHaveLength(1);
+      expect(after[0]!.editedAt).toBeGreaterThan(0);
+      expect(after[0]!.ciphertext).toBe(bytesToBase64(second.ciphertext));
+
+      // The author's own devices are told too, not just the other member.
+      await waitFor(() => a.frames.find((f) => f.t === 'edited'));
+
+      a.ws.close();
+      b.ws.close();
+    });
+
     test('a socket is refused for a room the user is not in', async () => {
       const h = await startServer(makeStore());
       servers.push(h.server);

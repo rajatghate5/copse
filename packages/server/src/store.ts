@@ -89,7 +89,8 @@ CREATE TABLE IF NOT EXISTS messages (
   -- One stamp, not one per member: the UI says "someone", and saying more would
   -- mean storing who read what, which is metadata this server does not need.
   delivered_at     INTEGER,
-  read_at          INTEGER
+  read_at          INTEGER,
+  edited_at        INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_room_members_user ON room_members (user_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_room ON conversations (room_id);
@@ -111,6 +112,7 @@ export const MIGRATIONS = [
   "ALTER TABLE conversations ADD COLUMN room_id TEXT NOT NULL DEFAULT ''",
   'ALTER TABLE messages ADD COLUMN delivered_at INTEGER',
   'ALTER TABLE messages ADD COLUMN read_at INTEGER',
+  'ALTER TABLE messages ADD COLUMN edited_at INTEGER',
 ];
 
 export interface NewUser {
@@ -192,6 +194,18 @@ export interface Store {
 
   appendMessage(m: NewMessage): Promise<WireMessage>;
   /**
+   * Replace one message's sealed body, if `senderId` wrote it. Returns the
+   * message as it now stands, or null when there is no such message by that
+   * author - the author check is in the statement as well as in the caller, so
+   * no code path can edit someone else's message.
+   */
+  editMessage(
+    messageId: string,
+    senderId: string,
+    body: { iv: string; ciphertext: string; signature: string },
+    at: number,
+  ): Promise<WireMessage | null>;
+  /**
    * Stamp the first delivery / read of these messages. Both are first-wins:
    * a later call never moves the time, so a reconnecting client replaying its
    * receipts cannot rewrite history.
@@ -263,6 +277,7 @@ interface MessageRow {
   sent_at: number;
   delivered_at: number | null;
   read_at: number | null;
+  edited_at?: number | null;
 }
 
 export function rowToMessage(r: MessageRow): WireMessage {
@@ -278,8 +293,13 @@ export function rowToMessage(r: MessageRow): WireMessage {
     // A row written before these columns existed reads as undefined, not null.
     deliveredAt: r.delivered_at ?? null,
     readAt: r.read_at ?? null,
+    editedAt: r.edited_at ?? null,
   };
 }
+
+/** The author check lives in the statement, not only in the caller. */
+export const EDIT_MESSAGE_SQL =
+  'UPDATE messages SET iv = ?, ciphertext = ?, signature = ?, edited_at = ? WHERE id = ? AND sender_id = ?';
 
 /** `OR IGNORE` is what makes re-adding an existing member a no-op. */
 export const ADD_MEMBER_SQL =
