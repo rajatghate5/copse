@@ -7,6 +7,6 @@
     "@copse/crypto": "workspace:*",
     "@copse/protocol": "workspace:*",
     "@libsql/client": "^0.18.0",
-    "hono": "^4.13.11"
+    "hono": "^4.13.13"
   }
 }
