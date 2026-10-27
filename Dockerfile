@@ -3,7 +3,7 @@
 # image, including the "copy one coherent tree" fix that avoids broken workspace
 # symlinks in the runtime stage.
 
-FROM oven/bun:1.4.2-alpine AS base
+FROM oven/bun:1.4.4-alpine AS base
 WORKDIR /app
 
 # --- deps -------------------------------------------------------------------
